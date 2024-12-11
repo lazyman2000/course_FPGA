@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 1
+// Additional Comments: Version 2
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -15,22 +15,21 @@
 module Crossbar_pipeline(
     input logic clk, //clock signal
     input logic rst, //reset signal (should be renamed?)
-    input logic uart_rx, //received data from UART (should be renamed as Vova says)
-    output logic uart_tx, //transmitted data to UART (should be renamed as Vova says)
+    input logic [7:0] uart_rx, //received data from UART (should be renamed as Vova says)
+    output logic [7:0] uart_tx, //transmitted data to UART (should be renamed as Vova says)
     output logic dht11_start, //signal for initializing DHT11 measurements (should be renamed as Kristina says)
-    input logic [15:0] dht11_data, //received data from DHT11 (should be renamed as Kristina says)
+    input logic [39:0] dht11_data, //received data from DHT11 (should be renamed as Kristina says)
     input logic dht11_data_available, //is data from DHT11 available? (should be renamed as Kristina says)
     output logic hc_sr04_start, //signal for initializing HC-SR04 measurements (should be renamed as Katya says)
-    input logic [39:0] hc_sr04_data, //received data from HC-SR04 (should be renamed as Katya says)
+    input logic [15:0] hc_sr04_data, //received data from HC-SR04 (should be renamed as Katya says)
     input logic hc_sr04_data_available //is data from DHT11 available? (should be renamed as Kristina says)
     );
     
     //numerable variable for device state
     typedef enum logic [1:0] {
         IDLE = 2'b00, //wait for command
-        READ_TEMP_N_MOIST = 2'b01, //type "T" for temperature and moisture measurement (command name should be set by Vova)
-        READ_DIST = 2'b10, //type "D" for distance measurement (command name should be set by Vova)
-        ERROR = 2'b11 //wrong command or some other problem
+        READ_TEMP_N_MOIST_CONT = 2'b01, //type 8'h54 ("T") for temperature and moisture measurement (command name should be set by Vova)
+        READ_DIST_CONT = 2'b10 //type 8'h44 ("D") for distance measurement (command name should be set by Vova)
     } device_state;
     
     device_state command_decode;
@@ -50,9 +49,12 @@ module Crossbar_pipeline(
         if (!rst) begin
             uart_command_fetch <= 8'b0;
             uart_received <= 1'b0;
-        end else begin //TO DO: if rst=1 the uart_received flag is being set to 1, need additional condition so its 1 only if data is actually received
+        end else begin
             uart_command_fetch <= uart_rx; //write the data from UART
-            uart_received <= 1'b1; //set the flag that the data received
+			case (uart_command_fetch) //if command is correct set the flag
+				8'h54, 8'h44: uart_received <= 1'b1; //set the flag that the data received
+				default: uart_received <= 1'b0;
+			endcase
         end
     end
     
@@ -61,14 +63,17 @@ module Crossbar_pipeline(
         if (!rst) begin
             command_decode <= IDLE; //the idle state
         end else begin
-            if (uart_received) begin //if command recieved on previous stage
+            if (uart_received) begin //if flag is set than decode the command otherwise stay in IDLE state
+                dht11_start <= 1'b0;
+                hc_sr04_start <= 1'b0;
                 case (uart_command_fetch)
-                    "T": command_decode <= READ_TEMP_N_MOIST; //read data from HC-SR4
-                    "D": command_decode <= READ_DIST; //read data from DHT11
-                    "S": command_decode <= IDLE; //stop any measurements and go idle
-                    default: command_decode <= ERROR; //wrong command or something else went wrong
+                    8'h54: command_decode <= READ_TEMP_N_MOIST_CONT; //read data from HC-SR4 (ASCII symbol "T")
+                    8'h44: command_decode <= READ_DIST_CONT; //read data from DHT11 (ASCII symbol "D")
+                    default: command_decode <= IDLE; //default state
                 endcase
-            end
+            end else begin
+				command_decode <= IDLE; //default state
+			end
         end
     end
     
@@ -80,16 +85,18 @@ module Crossbar_pipeline(
             execute_data <= 40'b0;
         end else begin
             case (command_decode)
-                READ_TEMP_N_MOIST: begin
+                READ_TEMP_N_MOIST_CONT: begin
                     dht11_start <= 1'b1; //send the measurement initializing bit
                     if (dht11_data_available) begin //if there is any data in sensor buffer, read it
                         execute_data <= dht11_data; //place recieved data from DHT11 into buffer
+                        $display("Data in buffer (temp): %h", execute_data);
                     end
                 end
-                READ_DIST: begin
+                READ_DIST_CONT: begin
                     hc_sr04_start <= 1'b1;
                     if (hc_sr04_data_available) begin
                         execute_data <= hc_sr04_data; //place recieved data from DHT11 into buffer
+                        $display("Data in buffer (dist): %h", execute_data);
                     end
                 end
                 default: begin
@@ -110,11 +117,11 @@ module Crossbar_pipeline(
             send_lower_byte <= 1'b1;
         end else begin
             case (command_decode)
-                READ_TEMP_N_MOIST: begin
+                READ_TEMP_N_MOIST_CONT: begin
                     if (!sending) begin
                         sending <= 1'b1;
                         TEMP_counter <= 3'b0;
-                    end else begin
+                    end else if (execute_data !== 40'b0) begin
                         case (TEMP_counter)
                             3'd0: uart_tx <= execute_data[7:0];  
                             3'd1: uart_tx <= execute_data[15:8];
@@ -126,28 +133,23 @@ module Crossbar_pipeline(
                         
                         if (TEMP_counter < 3'd4) begin
                             TEMP_counter <= TEMP_counter + 1;
+                            $display("Counter: %d", TEMP_counter);
                         end else begin
                             sending <= 1'b0;
                         end
                     end
                     //uart_tx <= execute_data[39:0];  //THIS SHOULD BE DONE THE OTHER WAY. 
                 end
-                READ_DIST: begin         
+                READ_DIST_CONT: begin         
                     if (send_lower_byte) begin
-                        uart_tx <= execute_data[7:0];  // Отправить младший байт
-                        send_lower_byte <= 1'b0;      // Переключиться на старший байт
+                        uart_tx <= execute_data[7:0];  
+                        send_lower_byte <= 1'b0;      
                     end else begin
-                        uart_tx <= execute_data[15:8]; // Отправить старший байт
-                        send_lower_byte <= 1'b1;      // Переключиться обратно
+                        uart_tx <= execute_data[15:8]; 
+                        send_lower_byte <= 1'b1;      
                     end
                 
                     //uart_tx <= execute_data[39:0];  //THIS SHOULD BE DONE THE OTHER WAY. 
-                end
-                ERROR: begin
-                    uart_tx <= 8'hFF; //error code
-                    sending <= 1'b0;
-                    TEMP_counter <= 3'b0;
-                    send_lower_byte <= 1'b1;
                 end
                 default: begin
                     uart_tx <= 8'b0;
