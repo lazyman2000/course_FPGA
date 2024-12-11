@@ -15,7 +15,6 @@ module uart_rx
     input logic clk,
     input logic rstn);
 
-   
    //----------------------------------------------------------------
    // description about receive UART signal
    typedef enum logic [1:0] {STT_DATA,
@@ -26,9 +25,9 @@ module uart_rx
    statetype                 state;
 
    logic [DATA_WIDTH-1:0]   data_tmp_r; // Регистр для временного хранения принимаемых данных
-   logic [LB_DATA_WIDTH:0]  data_cnt; // Счетчик битов данных
-   logic [LB_PULSE_WIDTH:0] clk_cnt; // Счетчик тактов для синхронизации с длительностью бита
-   logic                    rx_done; // Флаг, указывающий, что все данные успешно приняты
+   logic [LB_DATA_WIDTH:0]  data_cnt;   // Счетчик битов данных
+   logic [LB_PULSE_WIDTH:0] clk_cnt;    // Счетчик тактов для синхронизации с длительностью бита
+   logic                    rx_done;   // Флаг, указывающий, что все данные успешно приняты
 
    always_ff @(posedge clk) begin
       if(!rstn) begin
@@ -39,20 +38,20 @@ module uart_rx
       end
       else begin
 
-         //-----------------------------------------------------------------------------
+         //----------------------------------------------------------------------
          // 3-state FSM
          case(state)
 
-           //-----------------------------------------------------------------------------
+           //----------------------------------------------------------------------
            // state      : STT_DATA
-           // Следующее состояние : когда все данные получены -> STT_STOP
+           // Следующее состояние: когда все данные получены -> STT_STOP
            STT_DATA: begin
               if(0 < clk_cnt) begin
                  clk_cnt <= clk_cnt - 1;
               end
               else begin
-              // rxif.sig - Текущий бит входного сигнала UART
-                 data_tmp_r <= {rxif.sig, data_tmp_r[DATA_WIDTH-1:1]}; //сдвиговый регистр
+                 // rxif.sig - Текущий бит входного сигнала UART
+                 data_tmp_r <= {rxif.sig, data_tmp_r[DATA_WIDTH-1:1]}; // Сдвиговый регистр
                  clk_cnt    <= PULSE_WIDTH;
 
                  if(data_cnt == DATA_WIDTH - 1) begin // Если все биты данных приняты
@@ -64,9 +63,9 @@ module uart_rx
               end
            end
 
-           //-----------------------------------------------------------------------------
+           //----------------------------------------------------------------------
            // state      : STT_STOP
-           //ПРоверка  stop bit
+           // Проверка стопового бита
            // Следующее состояние : STT_WAIT
            STT_STOP: begin
               if(0 < clk_cnt) begin
@@ -77,14 +76,14 @@ module uart_rx
               end
            end
 
-           //-----------------------------------------------------------------------------
+           //----------------------------------------------------------------------
            // state      : STT_WAIT
            // Ожидание стартового бита
            // Следующее состояние: когда start bit получен -> STT_DATA
            STT_WAIT: begin
-           // Постоянно отслеживается входной сигнал
-              if(rxif.sig == 0) begin //Если обнаружен стартовый бит
-                 clk_cnt  <= PULSE_WIDTH + HALF_PULSE_WIDTH; // для синхронизации с серединой стартового бита
+              // Постоянно отслеживается входной сигнал
+              if(rxif.sig == 0) begin // Если обнаружен стартовый бит
+                 clk_cnt  <= PULSE_WIDTH + HALF_PULSE_WIDTH; // Для синхронизации с серединой стартового бита
                  data_cnt <= 0;
                  state    <= STT_DATA;
               end
@@ -99,7 +98,7 @@ module uart_rx
 
    assign rx_done = (state == STT_STOP) && (clk_cnt == 0);
 
-   //-----------------------------------------------------------------------------
+   //----------------------------------------------------------------------
    // description about output signal
    logic [DATA_WIDTH-1:0] data_r;
    logic                  valid_r; // Флаг, указывающий, что данные готовы для передачи через интерфейс
@@ -109,12 +108,9 @@ module uart_rx
          data_r  <= 0;
          valid_r <= 0;
       end
-      else if(rx_done && !valid_r) begin
+      else if(rx_done) begin
          valid_r <= 1;
          data_r  <= data_tmp_r;
-      end
-      else if(valid_r && rxif.ready) begin
-         valid_r <= 0;
       end
    end
 
