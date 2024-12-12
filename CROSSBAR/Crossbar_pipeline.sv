@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 3
+// Additional Comments: Version 4
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -15,15 +15,15 @@
 module Crossbar_pipeline(
     input logic clk, //clock signal
     input logic rst, //reset signal (should be renamed?)
-    input logic [7:0] uart_rx, //received data from UART (should be renamed as Vova says)
-    output logic [7:0] uart_tx, //transmitted data to UART (should be renamed as Vova says)
-    input logic uart_ready,
-    output logic dht11_start, //signal for initializing DHT11 measurements (should be renamed as Katya says)
-    input logic [15:0] dht11_data, //received data from DHT11 (should be renamed as Katya says)
-    input logic dht11_data_available, //is data from DHT11 available? (should be renamed as Katya says)
-    output logic hc_sr04_start, //signal for initializing HC-SR04 measurements (should be renamed as Kristina says)
-    input logic [15:0] hc_sr04_data, //received data from HC-SR04 (should be renamed as Kristina says)
-    input logic hc_sr04_data_available //is data from DHT11 available? (should be renamed as Kristina says)
+    input logic [7:0] uart_rx, //received data from UART (should be renamed)
+    output logic [7:0] uart_tx, //transmitted data to UART (should be renamed)
+    input logic uart_ready, //is UART ready to read? (should be renamed)
+    output logic dht11_start, //signal for initializing DHT11 measurements (should be renamed)
+    input logic [15:0] dht11_data, //received data from DHT11 (should be renamed)
+    input logic dht11_data_available, //is data from DHT11 available? (should be renamed)
+    output logic hc_sr04_start, //signal for initializing HCSR04 measurements (should be renamed)
+    input logic [15:0] hc_sr04_data, //received data from HCSR04 (should be renamed)
+    input logic hc_sr04_data_available //is data from DHT11 available? (should be renamed)
     );
     
     //numerable variable for device state
@@ -31,168 +31,143 @@ module Crossbar_pipeline(
         IDLE = 3'b000, //wait for command
         START_TEMP_N_MOIST = 3'b001,
         START_DIST = 3'b010,
-        READ_TEMP_N_MOIST = 3'b011, //type 8'h54 ("T") for temperature and moisture measurement (command name should be set by Vova)
-        READ_DIST = 3'b100 //type 8'h44 ("D") for distance measurement (command name should be set by Vova)
+        READ_TEMP_N_MOIST = 3'b011, //type 8'h54 ("T") for temperature and moisture measurement
+        READ_DIST = 3'b100 //type 8'h44 ("D") for distance measurement
     } device_state;
     
     device_state command_decode;
     
     //buffers for pipeline
-    logic [7:0] uart_command_fetch; //register for received UART command (ASCII symbol) (size should be changed as Vova says)        
-    logic [15:0] execute_data; //data from the sensor 40-bit (should be changed, i guess. DHT11 has 16 bit resolution and HC-SR4 has 40 bits package including control sum, idk)      
+    logic [7:0] uart_command_fetch; //register for received UART command (ASCII symbol)        
+    logic [15:0] execute_data; //buffer for receieved data from sensors 
+    logic [31:0] ascii_data_dist; //buffer for DHT11 data in ASCII symbols
+    logic [31:0] ascii_data_temp; //buffer for HCSR4 temperature data in ASCII symbols   
+    logic [31:0] ascii_data_moist; //buffer for HCSR4 moisture data in ASCII symbols    
     
-    //logic uart_received; //flag if data received from UART 
-    logic start_bit_set;
+    logic ready_temp, ready_moist, ready_dist;  
     
-    logic [1:0] counter; //counter for transmitting data by bytes
+    logic [3:0] counter; //counter for transmitting data by bytes
     logic sending; //flag if the data is sending
 
-    //stage 1 - Fetch
+    //Fetch
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             uart_command_fetch <= 8'b0;
-            start_bit_set <= 1'b0;
-            //uart_received <= 1'b0;
         end else begin
             uart_command_fetch <= uart_rx; //write the data from UART
-			/*case (uart_command_fetch) //if command is correct set the flag
-				8'h54, 8'h44: uart_received <= 1'b1; //set the flag that the data received
-				default: uart_received <= 1'b0;
-			endcase*/
         end
     end
     
-    //stage 2 - Decode the command from UART
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             command_decode <= IDLE; //the idle state
-        end else begin
-            //if (uart_received) begin //if flag is set than decode the command otherwise stay in IDLE state
-                //dht11_start <= 1'b0;
-                //hc_sr04_start <= 1'b0;
-            if (!start_bit_set) begin
-                case (uart_command_fetch)
-                    8'h54: command_decode <= START_TEMP_N_MOIST; //read data from HC-SR4 (ASCII symbol "T")
-                    8'h44: command_decode <= START_DIST; //read data from DHT11 (ASCII symbol "D")
-                    default: command_decode <= IDLE; //default state
-                endcase
-            /*end else begin 
-                $display("start_bit_set is 1 now");
-                case (command_decode)
-                    START_TEMP_N_MOIST: command_decode <= READ_TEMP_N_MOIST;
-                    START_DIST: command_decode <= READ_DIST;
-                    default: command_decode <= IDLE;
-                endcase
-            end*/
-            end else if (command_decode == START_TEMP_N_MOIST) begin
-				 command_decode <= READ_TEMP_N_MOIST;
-            end else if (command_decode == START_DIST) begin
-				 command_decode <= READ_DIST;
-			end
-        end
-    end
-    
-    //stage 3 - Recieve data from the sensor
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
             dht11_start <= 1'b0;
             hc_sr04_start <= 1'b0;
             execute_data <= 16'b0;
+            uart_tx <= 8'b0;
+            counter <= 4'b0;
+            sending <= 1'b0;
         end else begin
-            case (command_decode)
+           case (command_decode)
+                IDLE: begin
+                    dht11_start <= 1'b0;
+                    hc_sr04_start <= 1'b0;
+                    execute_data <= 16'b0;
+                    $display("Inside IDLE state");
+                    
+                    if (uart_command_fetch == 8'h54) begin
+                        command_decode <= START_TEMP_N_MOIST;
+                    end else if (uart_command_fetch == 8'h44) begin
+                        command_decode <= START_DIST;
+                    end else begin
+                        command_decode <= IDLE;
+                    end
+                end
                 START_TEMP_N_MOIST: begin
                     dht11_start <= 1'b1; //send the measurement initializing bit for DHT11
-                    start_bit_set <= 1'b1;
                     $display("Inside START_TEMP_N_MOIST state");
+                    command_decode <= READ_TEMP_N_MOIST;
                 end
                 START_DIST: begin
                     hc_sr04_start <= 1'b1; //send the measurement initializing bit for HCSR4
-                    start_bit_set <= 1'b1;
                     $display("Inside START_DIST state");
+                    command_decode <= READ_DIST;
                 end
                 READ_TEMP_N_MOIST: begin
                     dht11_start <= 1'b0; //send the measurement initializing bit
-                    if (dht11_data_available) begin //if there is any data in sensor buffer, read it
+                    if (!ready_temp && !ready_moist && dht11_data_available) begin //if there is any data in sensor buffer, read it
                         execute_data <= dht11_data; //place recieved data from DHT11 into buffer
-                        $display("Data in buffer (temp): %h", execute_data);
+                        $display("Data in buffer (temp): %d", execute_data);
+                    end
+                    
+                    if (ready_temp && ready_moist) begin
+                        if (!sending && uart_ready) begin
+                            sending <= 1'b1;
+                            counter <= 4'b0;
+                        end else if (execute_data !== 16'b0 && uart_ready) begin
+                            case (counter)
+                                4'd0: uart_tx <= ascii_data_temp[23:16]; 
+                                4'd1: uart_tx <= ascii_data_temp[15:8];
+                                4'd2: uart_tx <= ascii_data_temp[7:0];
+                                4'd3: uart_tx <= 8'h0D;
+                                4'd4: uart_tx <= ascii_data_moist[23:16];
+                                4'd5: uart_tx <= ascii_data_moist[15:8];
+                                4'd6: uart_tx <= ascii_data_moist[7:0];
+                                4'd7: uart_tx <= 8'h0D;
+                                default: sending <= 1'b0;
+                            endcase
+                            $display("ascii_data_temp: %b",ascii_data_temp[15:8]);
+                            $display("ascii_data_moist: %b",ascii_data_moist[7:0]);
+                            if (counter < 4'd7) begin
+                                counter <= counter + 1;
+                                $display("Counter: %d", counter);
+                            end else begin
+                                sending <= 1'b0;
+                                command_decode <= IDLE;
+                            end
+                        end
                     end
                 end
                 READ_DIST: begin
                     hc_sr04_start <= 1'b0;
-                    if (hc_sr04_data_available) begin
+                    if (!ready_dist && hc_sr04_data_available) begin
                         execute_data <= hc_sr04_data; //place recieved data from DHT11 into buffer
-                        $display("Data in buffer (dist): %h", execute_data);
+                        $display("Data in buffer (dist): %d", execute_data);
+                    end
+                    
+                    if (ready_dist) begin             
+                        if (!sending && uart_ready) begin
+                            sending <= 1'b1;
+                            counter <= 4'b0;
+                        end else if (execute_data !== 16'b0 && uart_ready) begin      
+                            case (counter)
+                                4'd0: uart_tx <= ascii_data_dist[31:24];  
+                                4'd1: uart_tx <= ascii_data_dist[23:16];
+                                4'd2: uart_tx <= ascii_data_dist[15:8];
+                                4'd3: uart_tx <= ascii_data_dist[7:0];
+                                4'd4: uart_tx <= 8'h0D;
+                                default: sending <= 1'b0;
+                            endcase
+                            $display("ascii_data_dist: %b",ascii_data_dist[31:0]);
+                            if (counter < 4'd4) begin
+                                counter <= counter + 1;
+                                $display("Counter: %d", counter);
+                            end else begin
+                                sending <= 1'b0;
+                                command_decode <= IDLE;
+                            end
+                        end
                     end
                 end
                 default: begin
+                    command_decode <= IDLE;
                     execute_data <= 16'b0;
-                    dht11_start <= 1'b0;
-                    hc_sr04_start <= 1'b0;
                 end
-            endcase
+           endcase
+           $display("ready_temp: %b, ready_moist: %b, ready_dist: %b",ready_temp,ready_moist,ready_dist);
         end
     end
-    
-    //stage 4 - Send data to UART
-    always_ff @(posedge clk or negedge rst) begin
-        if (!rst) begin
-            uart_tx <= 8'b0;
-            counter <= 2'b0;
-            sending <= 1'b0;
-            start_bit_set <= 1'b0;
-        end else begin
-            case (command_decode)
-                READ_TEMP_N_MOIST: begin
-                    if (!sending && uart_ready) begin
-                        sending <= 1'b1;
-                        counter <= 3'b0;
-                    end else if (execute_data !== 16'b0 && uart_ready) begin
-                        case (counter)
-                            3'd0: uart_tx <= execute_data[7:0];  
-                            3'd1: uart_tx <= 8'h0D;
-                            3'd2: uart_tx <= execute_data[15:8];
-                            3'd3: uart_tx <= 8'h0D; 
-                            default: sending <= 1'b0;
-                        endcase
-                        
-                        if (counter < 3'd3) begin
-                            counter <= counter + 1;
-                            $display("Counter: %d", counter);
-                        end else begin
-                            sending <= 1'b0;
-                            start_bit_set <= 1'b0;
-                        end
-                    end
-                    //uart_tx <= execute_data[39:0];  //THIS SHOULD BE DONE THE OTHER WAY. 
-                end
-                READ_DIST: begin   
-                    if (!sending && uart_ready) begin
-                        sending <= 1'b1;
-                        counter <= 3'b0;
-                    end else if (execute_data !== 16'b0 && uart_ready) begin      
-                        case (counter)
-                            3'd0: uart_tx <= execute_data[7:0];  
-                            3'd1: uart_tx <= execute_data[15:8];
-                            3'd2: uart_tx <= 8'h0D;
-                            default: sending <= 1'b0;
-                        endcase
-                        
-                        if (counter < 3'd2) begin
-                            counter <= counter + 1;
-                            $display("Counter: %d", counter);
-                        end else begin
-                            sending <= 1'b0;
-                            start_bit_set <= 1'b0;
-                        end
-                    end
-                    //uart_tx <= execute_data[39:0];  //THIS SHOULD BE DONE THE OTHER WAY. 
-                end
-                default: begin
-                    uart_tx <= 8'b0;
-                    sending <= 1'b0;
-                    counter <= 3'b0;
-                end
-            endcase
-        end
-    end
+    BCD_SV_ff DHT11_TEMP(.bin_in({8'b0, execute_data[15:8]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_temp), .ready(ready_temp));
+    BCD_SV_ff DHT11_MOIST(.bin_in({8'b0, execute_data[7:0]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_moist), .ready(ready_moist));
+    BCD_SV_ff HCSR4(.bin_in(execute_data[13:0]), .clk(clk), .rst(rst), .ascii_out(ascii_data_dist), .ready(ready_dist));
 endmodule
