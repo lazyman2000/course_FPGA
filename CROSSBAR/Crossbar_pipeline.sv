@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 4
+// Additional Comments: Version 5
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +44,8 @@ module Crossbar_pipeline(
     logic [31:0] ascii_data_temp; //buffer for HCSR4 temperature data in ASCII symbols   
     logic [31:0] ascii_data_moist; //buffer for HCSR4 moisture data in ASCII symbols    
     
-    logic ready_temp, ready_moist, ready_dist;  
+    logic ready_temp, ready_moist, ready_dist;
+    logic bcd_temp, bcd_moist, bcd_dist;  
     
     logic [3:0] counter; //counter for transmitting data by bytes
     logic sending; //flag if the data is sending
@@ -67,13 +68,18 @@ module Crossbar_pipeline(
             uart_tx <= 8'b0;
             counter <= 4'b0;
             sending <= 1'b0;
+            bcd_temp <= 1'b0;
+            bcd_moist <= 1'b0;
+            bcd_dist <= 1'b0;
         end else begin
            case (command_decode)
                 IDLE: begin
                     dht11_start <= 1'b0;
                     hc_sr04_start <= 1'b0;
                     execute_data <= 16'b0;
-                    $display("Inside IDLE state");
+                    bcd_temp <= 1'b0;
+                    bcd_moist <= 1'b0;
+                    bcd_dist <= 1'b0;
                     
                     if (uart_command_fetch == 8'h54) begin
                         command_decode <= START_TEMP_N_MOIST;
@@ -85,19 +91,19 @@ module Crossbar_pipeline(
                 end
                 START_TEMP_N_MOIST: begin
                     dht11_start <= 1'b1; //send the measurement initializing bit for DHT11
-                    $display("Inside START_TEMP_N_MOIST state");
                     command_decode <= READ_TEMP_N_MOIST;
                 end
                 START_DIST: begin
                     hc_sr04_start <= 1'b1; //send the measurement initializing bit for HCSR4
-                    $display("Inside START_DIST state");
                     command_decode <= READ_DIST;
                 end
                 READ_TEMP_N_MOIST: begin
                     dht11_start <= 1'b0; //send the measurement initializing bit
-                    if (!ready_temp && !ready_moist && dht11_data_available) begin //if there is any data in sensor buffer, read it
+                    
+                    if (dht11_data_available) begin //if there is any data in sensor buffer, read it
                         execute_data <= dht11_data; //place recieved data from DHT11 into buffer
-                        $display("Data in buffer (temp): %d", execute_data);
+                        bcd_temp <= 1'b1;
+                        bcd_moist <= 1'b1;
                     end
                     
                     if (ready_temp && ready_moist) begin
@@ -116,11 +122,14 @@ module Crossbar_pipeline(
                                 4'd7: uart_tx <= 8'h0D;
                                 default: sending <= 1'b0;
                             endcase
-                            $display("ascii_data_temp: %b",ascii_data_temp[15:8]);
-                            $display("ascii_data_moist: %b",ascii_data_moist[7:0]);
+                            //$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
+                            //$display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
+                            //$display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
+                            //$display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
+                            //$display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
+                            //$display("ascii_data_moist3: %b",ascii_data_moist[7:0]);
                             if (counter < 4'd7) begin
                                 counter <= counter + 1;
-                                $display("Counter: %d", counter);
                             end else begin
                                 sending <= 1'b0;
                                 command_decode <= IDLE;
@@ -130,9 +139,9 @@ module Crossbar_pipeline(
                 end
                 READ_DIST: begin
                     hc_sr04_start <= 1'b0;
-                    if (!ready_dist && hc_sr04_data_available) begin
+                    if (hc_sr04_data_available) begin
                         execute_data <= hc_sr04_data; //place recieved data from DHT11 into buffer
-                        $display("Data in buffer (dist): %d", execute_data);
+                        bcd_dist <= 1'b1;
                     end
                     
                     if (ready_dist) begin             
@@ -148,10 +157,9 @@ module Crossbar_pipeline(
                                 4'd4: uart_tx <= 8'h0D;
                                 default: sending <= 1'b0;
                             endcase
-                            $display("ascii_data_dist: %b",ascii_data_dist[31:0]);
+
                             if (counter < 4'd4) begin
                                 counter <= counter + 1;
-                                $display("Counter: %d", counter);
                             end else begin
                                 sending <= 1'b0;
                                 command_decode <= IDLE;
@@ -164,10 +172,10 @@ module Crossbar_pipeline(
                     execute_data <= 16'b0;
                 end
            endcase
-           $display("ready_temp: %b, ready_moist: %b, ready_dist: %b",ready_temp,ready_moist,ready_dist);
         end
     end
-    BCD_SV_ff DHT11_TEMP(.bin_in({8'b0, execute_data[15:8]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_temp), .ready(ready_temp));
-    BCD_SV_ff DHT11_MOIST(.bin_in({8'b0, execute_data[7:0]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_moist), .ready(ready_moist));
-    BCD_SV_ff HCSR4(.bin_in(execute_data[13:0]), .clk(clk), .rst(rst), .ascii_out(ascii_data_dist), .ready(ready_dist));
+    
+    BCD_SV_ff DHT11_TEMP(.bin_in({6'b0, execute_data[15:8]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_temp), .cross_ready(bcd_temp), .bcd_ready(ready_temp));
+    BCD_SV_ff DHT11_MOIST(.bin_in({6'b0, execute_data[7:0]}), .clk(clk), .rst(rst), .ascii_out(ascii_data_moist), .cross_ready(bcd_moist), .bcd_ready(ready_moist));
+    BCD_SV_ff HCSR4(.bin_in(execute_data[13:0]), .clk(clk), .rst(rst), .ascii_out(ascii_data_dist), .cross_ready(bcd_dist), .bcd_ready(ready_dist));
 endmodule
