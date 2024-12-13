@@ -30,15 +30,15 @@ initial
 begin
 start = 'd0;
 clk = 'd0;
-rst = 'd0;
+rst = 'd1;
 echo = 'd0;
-#3 rst = 'd1;
-#1 rst = 'd0;
+#3 rst = 'd0;
+#1 rst = 'd1;
 #5 start = 'd1;
-#1 start = 'd0;
-#10500 echo = 'd1;
+#10 start = 'd0;
+#210000 echo = 'd1; // 
 #500000 echo = 'd0; //  85mm  cm
-#50 $finish;
+#5000 $finish;
 end
 always
 begin
