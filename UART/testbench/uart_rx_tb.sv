@@ -1,6 +1,5 @@
 timeunit 1ns;
 timeprecision 1ns;
-
 `include "../rtl/if/uart_if.sv"
 
 module uart_rx_tb;
@@ -13,23 +12,22 @@ module uart_rx_tb;
   // Локальные параметры
   localparam PULSE_WIDTH = CLK_FREQ / BAUD_RATE;
 
-  // Интерфейс UART
-  uart_if #(DATA_WIDTH) rxif();
-
-  // Тестируемый модуль
+  // Сигналы для теста
   logic clk;
   logic rstn;
   logic sensor_ready;
   logic [DATA_WIDTH-1:0] sensor_data;
   logic sensor_valid;
+  logic rx_sig;
 
+  // Тестируемый модуль
   uart_rx #(DATA_WIDTH, BAUD_RATE, CLK_FREQ) uut (
-    .rxif(rxif),
     .clk(clk),
     .rstn(rstn),
     .sensor_ready(sensor_ready),
     .sensor_data(sensor_data),
-    .sensor_valid(sensor_valid)
+    .sensor_valid(sensor_valid),
+    .rx_sig(rx_sig)
   );
 
   // Генератор тактового сигнала
@@ -41,17 +39,17 @@ module uart_rx_tb;
     integer i;
     begin
       // Генерация стартового бита
-      rxif.sig = 0;
+      rx_sig = 0;
       #(PULSE_WIDTH * 10);
 
       // Генерация бит данных
       for (i = 0; i < DATA_WIDTH; i = i + 1) begin
-        rxif.sig = data[i];
+        rx_sig = data[i];
         #(PULSE_WIDTH * 10);
       end
 
       // Генерация стопового бита
-      rxif.sig = 1;
+      rx_sig = 1;
       #(PULSE_WIDTH * 10);
     end
   endtask
@@ -60,7 +58,7 @@ module uart_rx_tb;
   initial begin
     rstn = 0;
     sensor_ready = 0;
-    rxif.sig = 1; // Линия в состоянии покоя
+    rx_sig = 1; // Линия в состоянии покоя
 
     #(PULSE_WIDTH * 10);
     rstn = 1;
