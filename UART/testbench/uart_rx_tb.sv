@@ -3,97 +3,105 @@ timeprecision 1ns;
 
 `include "../rtl/if/uart_if.sv"
 
-module uart_rx_tb();
-   localparam DATA_WIDTH = 8;
-   localparam BAUD_RATE  = 115200;
-   localparam CLK_FREQ   = 100_000_000;
+module uart_rx_tb;
 
-   uart_if #(DATA_WIDTH) rxif();
-   logic clk, rstn;
+  // Параметры
+  parameter DATA_WIDTH = 8;
+  parameter BAUD_RATE  = 115200;
+  parameter CLK_FREQ   = 100_000_000;
 
-   //----------------------------------------------------------------------------- 
-   // clock generator 
-   localparam CLK_PERIOD = 1_000_000_000 / CLK_FREQ;
+  // Локальные параметры
+  localparam PULSE_WIDTH = CLK_FREQ / BAUD_RATE;
 
-   initial begin
-      clk = 1'b0;
-      forever #(CLK_PERIOD / 2) clk = ~clk;
-   end
+  // Интерфейс UART
+  uart_if #(DATA_WIDTH) rxif();
 
-   //----------------------------------------------------------------------------- 
-   // DUT 
-   uart_rx #(DATA_WIDTH, BAUD_RATE, CLK_FREQ) dut(.rxif(rxif),
-                                                  .clk(clk),
-                                                  .rstn(rstn));
+  // Тестируемый модуль
+  logic clk;
+  logic rstn;
+  logic sensor_ready;
+  logic [DATA_WIDTH-1:0] sensor_data;
+  logic sensor_valid;
 
-   //----------------------------------------------------------------------------- 
-   // test scenario 
-   localparam LB_DATA_WIDTH = $clog2(DATA_WIDTH);
-   localparam PULSE_WIDTH   = CLK_FREQ / BAUD_RATE;
+  uart_rx #(DATA_WIDTH, BAUD_RATE, CLK_FREQ) uut (
+    .rxif(rxif),
+    .clk(clk),
+    .rstn(rstn),
+    .sensor_ready(sensor_ready),
+    .sensor_data(sensor_data),
+    .sensor_valid(sensor_valid)
+  );
 
-   logic [DATA_WIDTH-1:0] data     = 0;
-   logic [DATA_WIDTH-1:0] sensor_data; // Переменная для хранения данных, отправленных на датчик
+  // Генератор тактового сигнала
+  initial clk = 0;
+  always #(5) clk = ~clk; // Период 10 нс -> 100 МГц
 
-   int                    success  = 1;
-   int                    end_flag = 0;
-   int                    index    = 0;
+  // Задача для генерации UART-сигнала
+  task send_uart_data(input [DATA_WIDTH-1:0] data);
+    integer i;
+    begin
+      // Генерация стартового бита
+      rxif.sig = 0;
+      #(PULSE_WIDTH * 10);
 
-   initial begin
-      rxif.sig   = 1;
-      rxif.ready = 0;
-      rstn       = 0;
-      sensor_data = 0; // Инициализация данных для датчика
-
-      repeat(100) @(posedge clk);
-      rstn       = 1;
-
-      while(!end_flag) begin
-
-         // Отправка данных в DUT
-         for(index = -1; index <= DATA_WIDTH; index++) begin
-            case(index)
-              -1:         rxif.sig = 0;  // Стартовый бит
-              DATA_WIDTH: rxif.sig = 1;  // Стоповый бит
-              default:    rxif.sig = data[index];
-            endcase
-
-            repeat(PULSE_WIDTH) @(posedge clk);
-         end
-
-         // Ожидание завершения приема
-         while(!rxif.valid) @(posedge clk);
-
-         // Проверка данных
-         $display("input : %b, received : %b", data, rxif.data);
-         if(data != rxif.data) begin
-            success = 0;
-         end
-
-         // Отправка данных в датчик
-         sensor_data = rxif.data; // Направление данных на "датчик"
-         $display("Data sent to sensor: %b", sensor_data);
-
-         // Задержка между кадрами
-         repeat($urandom_range(PULSE_WIDTH/2, PULSE_WIDTH)) @(posedge clk);
-
-         // Завершение теста, если все данные проверены
-         if(data == 8'b1111_1111) begin
-            end_flag = 1;
-         end
-         else begin
-            data = data + 1;
-         end
+      // Генерация бит данных
+      for (i = 0; i < DATA_WIDTH; i = i + 1) begin
+        rxif.sig = data[i];
+        #(PULSE_WIDTH * 10);
       end
 
-      // Вывод результата симуляции
-      if(success) begin
-         $display("Simulation is SUCCESS!");
-      end
-      else begin
-         $display("Simulation is FAILURE!");
-      end
+      // Генерация стопового бита
+      rxif.sig = 1;
+      #(PULSE_WIDTH * 10);
+    end
+  endtask
 
-      $finish;
-   end
+  // Инициализация сигналов
+  initial begin
+    rstn = 0;
+    sensor_ready = 0;
+    rxif.sig = 1; // Линия в состоянии покоя
+
+    #(PULSE_WIDTH * 10);
+    rstn = 1;
+
+    // Тестовые сценарии
+
+    // Сценарий 1: ПК отправляет данные, датчик не готов
+    $display("Scenario 1: Waiting for sensor to be ready after receiving data from PC");
+    send_uart_data(8'hA5); // Отправляем 0xA5
+    #(PULSE_WIDTH * 50); // Датчик не готов некоторое время
+    sensor_ready = 1;    // Датчик становится готов
+    #(PULSE_WIDTH * 20);
+    sensor_ready = 0;
+
+    // Сценарий 2: ПК перезаписывает буфер, датчик не готов
+    $display("Scenario 2: Buffer overwritten by PC while waiting for sensor readiness");
+    send_uart_data(8'h5A); // Отправляем 0x5A
+    #(PULSE_WIDTH * 30);
+    send_uart_data(8'hFF); // Перезаписываем буфер новым значением 0xFF
+    #(PULSE_WIDTH * 20);
+    sensor_ready = 1; // Датчик становится готов
+    #(PULSE_WIDTH * 20);
+    sensor_ready = 0;
+
+    // Сценарий 3: Датчик заранее готов
+    $display("Scenario 3: Sensor ready before PC data is received");
+    sensor_ready = 1; // Датчик готов заранее
+    send_uart_data(8'hC3); // Отправляем 0xC3
+    #(PULSE_WIDTH * 20);
+    sensor_ready = 0;
+
+    // Завершение симуляции
+    #(PULSE_WIDTH * 50);
+    $finish;
+  end
+
+  // Мониторинг сигналов
+  initial begin
+    $monitor($time, 
+             " sensor_ready=%b, sensor_valid=%b, sensor_data=%h", 
+             sensor_ready, sensor_valid, sensor_data);
+  end
 
 endmodule
