@@ -20,25 +20,21 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module HCSR04(clk, rst, start, echo, trig, distance, val);
-input clk, rst, start, echo; 
-output reg trig, val;
-output reg [11:0] distance;  // in mm
+module HCSR04(input logic clk, rst, start, echo, 
+output logic trig, val, 
+output logic [11:0] distance); // in mm
 logic [2:0] state;
-reg [21:0] cnt_e;
-reg [9:0] cnt_t; // cnt = 10ns
+logic [21:0] cnt_e;
+logic [9:0] cnt_t; // cnt = 10ns
 
-enum logic [2:0] {RESET = 3'd0, START = 3'd1, TRIGGER = 3'd2, WAITER = 3'd3, ECHO = 3'd4, DONE = 3'd5} STATE;
+ enum logic [2:0] {RESET = 3'd0, SIG = 3'd1, START = 3'd1, TRIGGER = 3'd2, WAITER = 3'd3, ECHO = 3'd4, DONE = 3'd5} STATE;
 
-always_ff @(posedge clk)
+ always_ff @(posedge clk or negedge rst)
 begin
-if (rst)
+ if (!rst)
 state <= RESET;
 else
- if (start)
- state <= START;
- else
- state <= RESET;
+ state <= SIG;
 case (state)
 RESET: 
 begin
@@ -46,11 +42,23 @@ val <=0;
 trig <=0;
 cnt_t <=0;
 cnt_e <=0;
-state <= START;
+ distance <= 0;
+state <= SIG;
+end
+ SIG: 
+begin
+val <=0;
+trig <=0;
+cnt_t <=0;
+cnt_e <=0;
+distance <= 0;
+ if (start)
+ state <= START;
+ else
+ state <= SIG;
 end
 START: 
 begin
-val <=0;
 trig <=1;
 state <= TRIGGER;
 end
