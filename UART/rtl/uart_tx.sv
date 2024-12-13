@@ -29,15 +29,19 @@ module uart_tx
    logic [LB_DATA_WIDTH-1:0] data_cnt;
    logic [LB_PULSE_WIDTH:0] clk_cnt;
 
+   // Internal flag for tracking readiness to receive data from the sensor
+   logic sensor_data_pending;
+
    always_ff @(posedge clk) begin
       if(!rstn) begin
-         state          <= STT_WAIT;
-         sig_r          <= 1;
-         data_r         <= 0;
-         ready_r        <= 1;
-         ready_to_sensor <= 1;
-         data_cnt       <= 0;
-         clk_cnt        <= 0;
+         state              <= STT_WAIT;
+         sig_r              <= 1;
+         data_r             <= 0;
+         ready_r            <= 1;
+         ready_to_sensor    <= 1;
+         sensor_data_pending <= 0;
+         data_cnt           <= 0;
+         clk_cnt            <= 0;
       end
       else begin
          case(state)
@@ -66,33 +70,35 @@ module uart_tx
                  state   <= STT_WAIT;
                  sig_r   <= 1;
                  clk_cnt <= PULSE_WIDTH + HALF_PULSE_WIDTH;
+                 ready_to_sensor <= 1; // Ready to accept new data from sensor
               end
            end
 
            STT_WAIT: begin
-              if(0 < clk_cnt) begin
-                 clk_cnt <= clk_cnt - 1;
-              end
-              else if(!ready_r) begin
-                 ready_r <= 1;
-              end
-              else if(valid_from_sensor) begin
-                 state          <= STT_DATA;
-                 sig_r          <= 0;
-                 data_r         <= data_from_sensor;
-                 ready_r        <= 0;
-                 ready_to_sensor <= 0; // Занято
-                 data_cnt       <= 0;
-                 clk_cnt        <= PULSE_WIDTH;
-              end
-              else if(txif.valid) begin
-                 state    <= STT_DATA;
-                 sig_r    <= 0;
-                 data_r   <= txif.data;
-                 ready_r  <= 0;
-                 ready_to_sensor <= 1; // Готов к приему от датчика
+              if(sensor_data_pending) begin
+                 // Process data from sensor
+                 state   <= STT_DATA;
+                 sig_r   <= 0; // Start bit
+                 data_r  <= data_from_sensor;
+                 ready_r <= 0;
+                 ready_to_sensor <= 0; // Not ready for new data from sensor
+                 sensor_data_pending <= 0;
                  data_cnt <= 0;
                  clk_cnt  <= PULSE_WIDTH;
+              end
+              else if(valid_from_sensor) begin
+                 // Capture data from sensor and mark as pending
+                 sensor_data_pending <= 1;
+                 ready_to_sensor <= 0;
+              end
+              else if(txif.valid) begin
+                 // Process data received from the UART interface
+                 state   <= STT_DATA;
+                 sig_r   <= 0; // Start bit
+                 data_r  <= txif.data;
+                 ready_r <= 0;
+                 data_cnt <= 0;
+                 clk_cnt <= PULSE_WIDTH;
               end
            end
 
