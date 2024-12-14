@@ -10,12 +10,10 @@ module DHT11(
 );
 
     // Параметры
-    parameter CLK_FREQ = 100000000; // Частота кристалла (100 МГц)
     parameter DHT11_START_DELAY = 1000;//100000000; // 1 sec
     parameter DHT11_DELAY = 1800000; // Задержка на 18 мс в тактах
     parameter DHT11_RESPONSE_TIME = 8000; // 80 мкс
     parameter DHT11_DATA_BITS = 40; // Количество бит данных
-    //parameter TIMEOUT = 10000; // Таймаут для ожидания данных (в тактах)
 
     // Константы для временных интервалов (кодировка 0 и 1)
    parameter LOW_DURATION = 5000; // 50 микросекунд
@@ -36,10 +34,12 @@ module DHT11(
     state_t state, next_state;
 
     // Счетчики для задержек
-    logic [27:0] counter; // счетчик "времени"
-    logic [27:0] counter_2;
+    logic [30:0] counter; // счетчик "времени"
+    logic [30:0] counter_2;
     logic [5:0] data_counter; // счетчик данных для 40 бит (отслеживает количество считанных бит данных)
     logic [14:0] bit_counter; // счетчик длительности для кодировки бит (max мб 12_000)
+    
+    logic [27:0] a;
 
     // Хранение данных
     logic [7:0] humidity_integer;
@@ -61,6 +61,7 @@ module DHT11(
         if (!rst_n) begin
             state <= IDLE; // режим ожидания
             counter <= 0; // сброс счетчика
+            counter_2 <= 0;
             ready <= 0; // сигнал готовности
             data_buffer <= 0; // сброс буфера данных
             humidity_integer <= 0;
@@ -69,53 +70,46 @@ module DHT11(
             bit_counter <= 0;
             uart_data <= 0; // Данные для отправки в UART
             dht11_data_output <= 0; // Изначально dht11_data на вход
+            dht11_data_internal <= 1;
             checksum <= 0;
+            uart_tx <= 0;
+            a <= 0;
         end 
         else begin
         state <= next_state;
 
             // Управление счетчиками
-            if (state == START) begin
+            if (state == START || state == WAIT_RESPONSE) begin
                 counter <= counter + 1;
             end 
             else begin
                 counter <= 0;
             end
             
-            if (state == WAIT_RESPONSE) begin
-                counter_2 <= counter_2 + 1;
-            end 
-            else begin
-                counter_2 <= 0;
-            end
-            
-            
-            
 
             // Получение данных от датчика
             if (state == READ_DATA) begin
-            bit_counter <= 0; // счетчик длительности для кодировки бит
-            data_counter <= 0;
-                if (data_counter != 40) begin 
-                bit_counter <= bit_counter + 1;
-                    if (bit_counter == LOW_DURATION) begin // 50 мкс
-                        // Определение битов
-                        if (bit_counter == (LOW_DURATION + (HIGH_DURATION_0-500)) && dht11_data == 0) begin
-                        // кодировка 0 
-                        data_buffer[data_counter] <= 0;
-                        bit_counter <= 0;
-                        //continue;
-                        end else if (bit_counter == (LOW_DURATION + (HIGH_DURATION_1-500)) && dht11_data == 1) begin
-                        // кодировка 1 
-                         data_buffer[data_counter] <= 1;
-                         bit_counter <= 0;
-                         //continue;
-                        end
-                        data_counter <= data_counter + 1;
+               if (data_counter != 40) begin
+               bit_counter <= bit_counter + 1;
+                    if (bit_counter == LOW_DURATION && dht11_data == 0) begin // 50 мкс
+                    //a = bit_counter;
                     end
+                        // Определение битов
+                    if (bit_counter == (LOW_DURATION + (HIGH_DURATION_0)) && dht11_data == 1) begin
+                        // кодировка 0 
+                    data_buffer[data_counter] <= 0;
+                    data_counter <= data_counter + 1;
                     bit_counter <= 0;
                     end
-                end
+                    if (bit_counter == (LOW_DURATION + (HIGH_DURATION_1)) && dht11_data == 1) begin
+                        // кодировка 1 
+                    data_buffer[data_counter] <= 1;
+                    data_counter <= data_counter + 1;
+                    bit_counter <= 0;
+                    end
+                    //bit_counter <= 0;
+                    end
+            end
             end
         end
     
@@ -142,33 +136,34 @@ module DHT11(
             end  
             end
             WAIT_RESPONSE: begin
-            if (dht11_data == 0) begin
-                // получаем ноль от датчика
-                if (counter_2 >= DHT11_RESPONSE_TIME) begin // Ждем 80 мкс
-                    // После низкого сигнала, ждем высокий
-                     if (dht11_data == 1) begin
-                    // ждем еще 80 мкс
-                        if (counter_2 >= 2*DHT11_RESPONSE_TIME) begin
-                    next_state = READ_DATA; // Переходим к чтению данных
-                end
-                end
-                end
-                end
+            if ((counter >= (DHT11_RESPONSE_TIME+DHT11_START_DELAY+DHT11_DELAY)) && dht11_data == 0) begin
+            //a = DHT11_RESPONSE_TIME+DHT11_START_DELAY+DHT11_DELAY+DHT11_RESPONSE_TIME;
+            //a = counter;
+            end
+             if ((counter >= (DHT11_RESPONSE_TIME+DHT11_START_DELAY+DHT11_DELAY+DHT11_RESPONSE_TIME)) && dht11_data == 1) begin
+            //a = counter;
+            next_state = READ_DATA;
+            end
         end
             READ_DATA: begin
-                if (data_counter >= DHT11_DATA_BITS) begin // когда получили 40 бит, переходим к отправке
-                    next_state = SEND_DATA;
+               if (data_counter == 39) begin // когда получили 40 бит, переходим к отправке
+               data_counter = 0;
+                next_state = SEND_DATA;
                 end
             end
             SEND_DATA: begin
-                        humidity_integer = data_buffer[7:0]; // Влажность
+                        humidity_integer = data_buffer[39:32]; // Влажность
+                        //a = humidity_integer;
                         temperature_integer = data_buffer[23:16]; // Температура
-                        checksum = data_buffer[39:32]; // Контрольная сумма
+                        //a = temperature_integer;
+                        checksum = data_buffer[7:0]; // Контрольная сумма
                         if (checksum == (humidity_integer + temperature_integer)) begin
+                        a = 1;
                             uart_tx = {temperature_integer, humidity_integer}; // Формируем 16 бит для передачи
                             ready <= 1;
                         end
                         else begin
+                        //a = 1;
                             uart_tx = 16'h0000; // Если контрольная сумма неверна, отправляем 0
                             ready <= 1;
                         end
