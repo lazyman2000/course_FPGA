@@ -39,7 +39,7 @@ state <= SIG;
 case (state)
 RESET:                                                    
 begin
-state <= SIG;
+state <= SIG;                
 end
 SIG:                       // waiting of start signal 
 begin
@@ -75,16 +75,16 @@ begin
   state <= ECHO;
   end
  else
-  state <= WAITER; 
+  state <= WAITER;
 end
 ECHO: 
 begin
  if (echo)
   begin
   cnt_e <= cnt_e +1;   // count number of clock while echo is on
-  state <= ECHO;
+  state <= ECHO; 
   end
- else
+ else 
   state <= DONE;
 end
 DONE: 
@@ -144,10 +144,10 @@ begin
  begin
   if (cnt_e > 0)
    begin
-   dist_m <= cnt_e*17;                
-   distance <= dist_m/10000;   // 340 m/s = 34*10^-5 ss/ns; N*cnt = N*10 ns; takes half => 17  
-   val<=1;                     // calculating the distance and setting the validity flag
-   end
+   dist_m <= cnt_e*17;           // 340 m/s = 34*10^-5 ss/ns; N*cnt = N*10 ns; takes half => 17; 10^-5*10 => 10^-4            
+   distance <= (dist_m >>> 14) + (dist_m >>> 15) + (dist_m >>> 17) + (dist_m >>> 21) + (dist_m >>> 22) + (dist_m >>> 24)+ (dist_m >>> 25);  
+   val<=1;                     // 10^-4 = 0.00000000000001101000110110111 (shifi left by degrees corresponding to 1)
+   end                         // calculating the distance and setting the validity flag
   else
   val <=0;
  end

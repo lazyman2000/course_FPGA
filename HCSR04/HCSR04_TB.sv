@@ -37,7 +37,9 @@ echo = 'd0;
 #5 start = 'd1;
 #10 start = 'd0;     // 1 clk
 #210000 echo = 'd1;  // 10000 - time of trig, 200000 - time of sensor generate signal
-#500000 echo = 'd0;  //  corresponds to 85 mm
+#500000 echo = 'd0;  //  expected 85 mm, actual 82 mm  
+//#1789630 echo = 'd0;  //  expected 304 mm, actual 301
+//#23529411 echo = 'd0;  //  expected 4000 mm, actual 3997
 #5000 $finish;
 end
 always
