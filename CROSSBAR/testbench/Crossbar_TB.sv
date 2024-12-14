@@ -24,6 +24,9 @@ module crossbar_pipeline_tb;
     logic hc_sr04_start;
     logic [15:0] hc_sr04_data;
     logic hc_sr04_data_available;
+    logic valid_command; 
+    logic ready_to_act; 
+    logic data_transaction_ready; 
 
     localparam CLK_PERIOD = 10; //100 MHz
 
@@ -38,11 +41,14 @@ module crossbar_pipeline_tb;
         .dht11_data_available(dht11_data_available),
         .hc_sr04_start(hc_sr04_start),
         .hc_sr04_data(hc_sr04_data),
-        .hc_sr04_data_available(hc_sr04_data_available)
+        .hc_sr04_data_available(hc_sr04_data_available),
+        .valid_command(valid_command),
+        .ready_to_act(ready_to_act),
+        .data_transaction_ready(data_transaction_ready)
     );
 
     always #(CLK_PERIOD / 2) clk = ~clk;
-
+    
     task reset_system();
         begin
             rst = 0;
@@ -66,23 +72,21 @@ module crossbar_pipeline_tb;
         hc_sr04_data = 16'd3214; 
         dht11_data_available = 0;
         hc_sr04_data_available = 0;
-        uart_ready = 1; //by deffault uart_ready always 1 except when UART is busy
+        uart_ready = 1; //(MIGHT BE OUTDATED)by deffault uart_ready always 1 except when UART is busy
+        valid_command = 0;
         
         reset_system();
 
         $display("Testing command 'T'...");
         send_command(8'h54); 
-        #(50*CLK_PERIOD);
-        dht11_data_available = 1; 
-        #(50*CLK_PERIOD);
-        uart_ready = 0;
-        #(50*CLK_PERIOD);
-        uart_ready = 1;
-        #(50*CLK_PERIOD);
-        uart_ready = 0;
-        #(50*CLK_PERIOD);
-        dht11_data_available = 0;
-        uart_ready = 1;
+        #(25*CLK_PERIOD);
+        valid_command = 1;
+        #(CLK_PERIOD);
+        valid_command = 0;
+        #(25*CLK_PERIOD);
+        dht11_data_available = 1;
+        #(CLK_PERIOD);
+        dht11_data_available = 0; 
         #(50*CLK_PERIOD);
         uart_ready = 0;
         #(50*CLK_PERIOD);
@@ -91,18 +95,34 @@ module crossbar_pipeline_tb;
         uart_ready = 0;
         #(50*CLK_PERIOD);
         uart_ready = 1;
+        #(50*CLK_PERIOD);
+        uart_ready = 0;
+        #(50*CLK_PERIOD);
+        uart_ready = 1;
+        #(50*CLK_PERIOD);
+        uart_ready = 0;
+        #(50*CLK_PERIOD);
+        uart_ready = 1;
+        #(50*CLK_PERIOD);
+        uart_ready = 0;
         #(50*CLK_PERIOD);
 
         $display("Testing command 'D'...");
         send_command(8'h44); 
-        #(50*CLK_PERIOD);
+        #(25*CLK_PERIOD);
+        valid_command = 1;
+        #(CLK_PERIOD);
+        valid_command = 0;
+        #(25*CLK_PERIOD);
         hc_sr04_data_available = 1; 
+        #(CLK_PERIOD);
+        hc_sr04_data_available = 0; 
         #(50*CLK_PERIOD);
         uart_ready = 0;
         #(50*CLK_PERIOD);
         uart_ready = 1;
         #(50*CLK_PERIOD);
-        hc_sr04_data_available = 0;
+        //hc_sr04_data_available = 0;
         uart_ready = 1;
         #(30*CLK_PERIOD);
         uart_ready = 0;
@@ -112,15 +132,12 @@ module crossbar_pipeline_tb;
         uart_ready = 0;
         #(30*CLK_PERIOD);
         uart_ready = 1;
-        #(60*CLK_PERIOD); //to see two starting pulses for the same command
-        //#(30*CLK_PERIOD); //to see only one starting pulse for the same command
+        #(30*CLK_PERIOD); 
         
 
         $display("Testing invalid command...");
         send_command(8'h58); 
-        hc_sr04_data_available = 1; //if u wanna check 2 pulses at one command situaion fully when the transmission ended 
         #(500*CLK_PERIOD);
-        hc_sr04_data_available = 0; //if u wanna check 2 pulses at one command situaion fully when the transmission ended 
         $display("All tests completed.");
         $stop;
     end
