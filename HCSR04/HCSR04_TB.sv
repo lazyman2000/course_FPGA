@@ -35,9 +35,9 @@ echo = 'd0;
 #3 rst = 'd0;
 #1 rst = 'd1;
 #5 start = 'd1;
-#10 start = 'd0;
-#210000 echo = 'd1; // 
-#500000 echo = 'd0; //  85mm  cm
+#10 start = 'd0;     // 1 clk
+#210000 echo = 'd1;  // 10000 - time of trig, 200000 - time of sensor generate signal
+#500000 echo = 'd0;  //  corresponds to 85 mm
 #5000 $finish;
 end
 always
