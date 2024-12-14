@@ -50,15 +50,15 @@ module uart_tx_tb;
 
     // Сценарий 2: Датчик отправляет данные сразу после их появления
     $display("Scenario 2: Sensor sends data immediately");
-    data_from_sensor = 8'hc3;
+    data_from_sensor = 8'ha5;
     valid_from_sensor = 1;
     #(PULSE_WIDTH * 20);
     valid_from_sensor = 0; // Данные отправлены
-    #(PULSE_WIDTH * 50);
+    #(PULSE_WIDTH * 70);
 
     // Сценарий 3: Датчик хочет отправить данные, но модуль не готов
     $display("Scenario 3: Sensor waits for readiness");
-    data_from_sensor = 8'hb3;
+    data_from_sensor = 8'ha5;
     valid_from_sensor = 1;
     #(PULSE_WIDTH * 10);
     valid_from_sensor = 0; // Модуль не готов принять новые данные
