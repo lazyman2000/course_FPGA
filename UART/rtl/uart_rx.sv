@@ -14,9 +14,9 @@ module uart_rx
     input logic rx_sig,
     input logic clk,
     input logic rstn,
-    input logic sensor_ready,
-    output logic [DATA_WIDTH-1:0] sensor_data,
-    output logic sensor_valid
+    input logic sensor_ready, // Входной сигнал, указывающий на готовность кроссбара принять данные.
+    output logic [DATA_WIDTH-1:0] sensor_data, // Выходной сигнал, через который данные передаются на кроссбар 
+    output logic sensor_valid // Выходной сигнал, указывающий, что данные на sensor_data действительны.
    );
 
    typedef enum logic [1:0] {STT_DATA,
@@ -30,8 +30,8 @@ module uart_rx
    logic [LB_PULSE_WIDTH:0] clk_cnt;
    logic rx_done;
 
-   logic [DATA_WIDTH-1:0] buffer_r;
-   logic buffer_valid;
+   logic [DATA_WIDTH-1:0] buffer_r; // используется для хранения данных, принятых от ПК, до тех пор, пока кроссбар не станет готов их принять
+   logic buffer_valid; // сигнализирует о наличии данных в буфере.
 
    always_ff @(posedge clk or negedge rstn) begin
       if (!rstn) begin
