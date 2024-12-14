@@ -1,5 +1,4 @@
 `include "if/uart_if.sv"
-
 module uart_rx
   #(parameter
     DATA_WIDTH = 8,
@@ -7,114 +6,90 @@ module uart_rx
     CLK_FREQ   = 100_000_000,
 
     localparam
-    LB_DATA_WIDTH    = $clog2(DATA_WIDTH), // Количество бит, необходимое для адресации всех бит данных
-    PULSE_WIDTH      = CLK_FREQ / BAUD_RATE, // Количество тактовых импульсов для одной длительности бита
+    LB_DATA_WIDTH    = $clog2(DATA_WIDTH),
+    PULSE_WIDTH      = CLK_FREQ / BAUD_RATE,
     LB_PULSE_WIDTH   = $clog2(PULSE_WIDTH),
     HALF_PULSE_WIDTH = PULSE_WIDTH / 2)
-   (uart_if.rx  rxif,
+   (
+    input logic rx_sig,
     input logic clk,
-    input logic rstn);
+    input logic rstn,
+    input logic sensor_ready, // Входной сигнал, указывающий на готовность кроссбара принять данные.
+    output logic [DATA_WIDTH-1:0] sensor_data, // Выходной сигнал, через который данные передаются на кроссбар 
+    output logic sensor_valid // Выходной сигнал, указывающий, что данные на sensor_data действительны.
+   );
 
-   //----------------------------------------------------------------
-   // description about receive UART signal
    typedef enum logic [1:0] {STT_DATA,
                              STT_STOP,
-                             STT_WAIT
-                             } statetype;
+                             STT_WAIT} statetype;
 
-   statetype                 state;
+   statetype state;
 
-   logic [DATA_WIDTH-1:0]   data_tmp_r; // Регистр для временного хранения принимаемых данных
-   logic [LB_DATA_WIDTH:0]  data_cnt;   // Счетчик битов данных
-   logic [LB_PULSE_WIDTH:0] clk_cnt;    // Счетчик тактов для синхронизации с длительностью бита
-   logic                    rx_done;   // Флаг, указывающий, что все данные успешно приняты
+   logic [DATA_WIDTH-1:0] data_tmp_r;
+   logic [LB_DATA_WIDTH:0] data_cnt;
+   logic [LB_PULSE_WIDTH:0] clk_cnt;
+   logic rx_done;
 
-   always_ff @(posedge clk) begin
-      if(!rstn) begin
-         state      <= STT_WAIT;
-         data_tmp_r <= 0;
-         data_cnt   <= 0;
-         clk_cnt    <= 0;
-      end
-      else begin
+   logic [DATA_WIDTH-1:0] buffer_r; // используется для хранения данных, принятых от ПК, до тех пор, пока кроссбар не станет готов их принять
+   logic buffer_valid; // сигнализирует о наличии данных в буфере.
 
-         //----------------------------------------------------------------------
-         // 3-state FSM
-         case(state)
-
-           //----------------------------------------------------------------------
-           // state      : STT_DATA
-           // Следующее состояние: когда все данные получены -> STT_STOP
+   always_ff @(posedge clk or negedge rstn) begin
+      if (!rstn) begin
+         state        <= STT_WAIT;
+         data_tmp_r   <= 0;
+         data_cnt     <= 0;
+         clk_cnt      <= 0;
+         buffer_r     <= 0;
+         buffer_valid <= 0;
+         sensor_valid <= 0;
+         sensor_data  <= 0;
+      end else begin
+         case (state)
            STT_DATA: begin
-              if(0 < clk_cnt) begin
+              if (0 < clk_cnt) begin
                  clk_cnt <= clk_cnt - 1;
-              end
-              else begin
-                 // rxif.sig - Текущий бит входного сигнала UART
-                 data_tmp_r <= {rxif.sig, data_tmp_r[DATA_WIDTH-1:1]}; // Сдвиговый регистр
+              end else begin
+                 data_tmp_r <= {rx_sig, data_tmp_r[DATA_WIDTH-1:1]};
                  clk_cnt    <= PULSE_WIDTH;
-
-                 if(data_cnt == DATA_WIDTH - 1) begin // Если все биты данных приняты
+                 if (data_cnt == DATA_WIDTH - 1) begin
                     state <= STT_STOP;
-                 end
-                 else begin
+                 end else begin
                     data_cnt <= data_cnt + 1;
                  end
               end
            end
 
-           //----------------------------------------------------------------------
-           // state      : STT_STOP
-           // Проверка стопового бита
-           // Следующее состояние : STT_WAIT
            STT_STOP: begin
-              if(0 < clk_cnt) begin
+              if (0 < clk_cnt) begin
                  clk_cnt <= clk_cnt - 1;
-              end
-              else if(rxif.sig) begin // Проверяется, соответствует ли rxif.sig = 1
-                 state <= STT_WAIT;
+              end else if (rx_sig) begin
+                 state        <= STT_WAIT;
+                 buffer_r     <= data_tmp_r;
+                 buffer_valid <= 1;
               end
            end
 
-           //----------------------------------------------------------------------
-           // state      : STT_WAIT
-           // Ожидание стартового бита
-           // Следующее состояние: когда start bit получен -> STT_DATA
            STT_WAIT: begin
-              // Постоянно отслеживается входной сигнал
-              if(rxif.sig == 0) begin // Если обнаружен стартовый бит
-                 clk_cnt  <= PULSE_WIDTH + HALF_PULSE_WIDTH; // Для синхронизации с серединой стартового бита
+              if (rx_sig == 0) begin
+                 clk_cnt  <= PULSE_WIDTH + HALF_PULSE_WIDTH;
                  data_cnt <= 0;
                  state    <= STT_DATA;
               end
            end
 
-           default: begin
-              state <= STT_WAIT;
-           end
+           default: state <= STT_WAIT;
          endcase
+
+         if (buffer_valid && sensor_ready) begin
+            sensor_data  <= buffer_r;
+            sensor_valid <= 1;
+            buffer_valid <= 0;
+         end else begin
+            sensor_valid <= 0;
+         end
       end
    end
 
    assign rx_done = (state == STT_STOP) && (clk_cnt == 0);
-
-   //----------------------------------------------------------------------
-   // description about output signal
-   logic [DATA_WIDTH-1:0] data_r;
-   logic                  valid_r; // Флаг, указывающий, что данные готовы для передачи через интерфейс
-
-   always_ff @(posedge clk) begin
-      if(!rstn) begin
-         data_r  <= 0;
-         valid_r <= 0;
-      end
-      else if(rx_done) begin
-         valid_r <= 1;
-         data_r  <= data_tmp_r;
-      end
-   end
-
-   assign rxif.data  = data_r;
-   assign rxif.valid = valid_r;
 
 endmodule
