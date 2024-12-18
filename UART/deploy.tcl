@@ -167,24 +167,24 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 # Set 'sources_1' fileset object
 set obj [get_filesets sources_1]
 set files [list \
- [file normalize "${origin_dir}/../SystemVerilog-UART-master/rtl/uart_rx.sv"] \
- [file normalize "${origin_dir}/../SystemVerilog-UART-master/rtl/uart_tx.sv"] \
- [file normalize "${origin_dir}/../SystemVerilog-UART-master/rtl/uart.sv"] \
+ [file normalize "${origin_dir}/../rtl/uart_rx.sv"] \
+ [file normalize "${origin_dir}/../rtl/uart_tx.sv"] \
+ [file normalize "${origin_dir}/../rtl/uart.sv"] \
 ]
 add_files -norecurse -fileset $obj $files
 
 # Set 'sources_1' fileset file properties for remote files
-set file "$origin_dir/../SystemVerilog-UART-master/rtl/uart_rx.sv"
+set file "$origin_dir/../rtl/uart_rx.sv"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
-set file "$origin_dir/../SystemVerilog-UART-master/rtl/uart_tx.sv"
+set file "$origin_dir/../rtl/uart_tx.sv"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
-set file "$origin_dir/../SystemVerilog-UART-master/rtl/uart.sv"
+set file "$origin_dir/../rtl/uart.sv"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
@@ -221,18 +221,18 @@ if {[string equal [get_filesets -quiet sim_1] ""]} {
 # Set 'sim_1' fileset object
 set obj [get_filesets sim_1]
 set files [list \
- [file normalize "${origin_dir}/../SystemVerilog-UART-master/testbench/uart_tx_tb.sv"] \
- [file normalize "${origin_dir}/../SystemVerilog-UART-master/testbench/uart_rx_tb.sv"] \
+ [file normalize "${origin_dir}/../testbench/uart_tx_tb.sv"] \
+ [file normalize "${origin_dir}/../testbench/uart_rx_tb.sv"] \
 ]
 add_files -norecurse -fileset $obj $files
 
 # Set 'sim_1' fileset file properties for remote files
-set file "$origin_dir/../SystemVerilog-UART-master/testbench/uart_tx_tb.sv"
+set file "$origin_dir/../testbench/uart_tx_tb.sv"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
-set file "$origin_dir/../SystemVerilog-UART-master/testbench/uart_rx_tb.sv"
+set file "$origin_dir/../testbench/uart_rx_tb.sv"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
