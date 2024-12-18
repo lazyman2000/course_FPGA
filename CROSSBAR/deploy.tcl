@@ -180,11 +180,11 @@ foreach f $files {
 # None
 
 # Set 'sources_1' fileset file properties for local files
-set file "new/BCD_SV_ff.sv"
+set file "../BCD_SV_ff.sv"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
-set file "new/Crossbar_pipeline.sv"
+set file "../Crossbar_pipeline.sv"
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
@@ -229,11 +229,11 @@ foreach f $files {
 # None
 
 # Set 'sim_1' fileset file properties for local files
-set file "new/Crossbar_TB.sv"
+set file "../Crossbar_TB.sv"
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
-set file "new/BCD_SV_ff_TB.sv"
+set file "../BCD_SV_ff_TB.sv"
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
@@ -261,7 +261,7 @@ foreach f $files {
 # None
 
 # Set 'utils_1' fileset file properties for local files
-set file "synth_1/Crossbar_pipeline.dcp"
+set file "../Crossbar_pipeline.dcp"
 set file_obj [get_files -of_objects [get_filesets utils_1] [list "*$file"]]
 set_property -name "netlist_only" -value "0" -objects $file_obj
 
