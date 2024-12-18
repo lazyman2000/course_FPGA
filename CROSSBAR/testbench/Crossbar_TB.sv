@@ -28,7 +28,7 @@ module crossbar_pipeline_tb;
     logic ready_to_act; 
     logic data_transaction_ready; 
 
-    localparam CLK_PERIOD = 10; //100 MHz
+    localparam CLK_PERIOD = 20; //100 MHz
 
     Crossbar_pipeline uut (
         .clk(clk),
@@ -68,7 +68,8 @@ module crossbar_pipeline_tb;
     initial begin
         clk = 0;
         uart_rx = 0;
-        dht11_data = 16'd9587;
+        //dht11_data = 16'd9587;
+        dht11_data = 16'h1616;
         hc_sr04_data = 16'd3214; 
         dht11_data_available = 0;
         hc_sr04_data_available = 0;

@@ -43,6 +43,8 @@ module BCD_SV_ff(
             default:
                 next_state = RESET;
         endcase
+        end else begin
+           next_state = START;
     end
     end
     always_ff @(posedge clk or negedge rst) begin
@@ -59,6 +61,7 @@ module BCD_SV_ff(
                     bcd <= 'd0;
                     i <= 4'd0;
                     bcd_ready <= 1'b0;
+                    //ascii_out <= 32'b0;
                     $display("inside START");
                     $display("START bin: %d", bin);
                 end
@@ -99,6 +102,6 @@ module BCD_SV_ff(
                 end
             endcase
         end
-        //$display("bin_in: %b, bcd: %b, ascii_out: %b",bin_in,bcd,ascii_out);
+        $display("bin_in: %b, bcd: %b, ascii_out: %b",bin_in,bcd,ascii_out);
     end
 endmodule

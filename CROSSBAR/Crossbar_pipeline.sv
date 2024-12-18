@@ -58,7 +58,7 @@ module Crossbar_pipeline(
     logic sending; //flag if the data is sending
 
     //Fetch
-    always_ff @(posedge clk or negedge rst) begin
+    /*always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             uart_command_fetch <= 8'b0;
             ready_to_act <= 1'b1;
@@ -66,7 +66,7 @@ module Crossbar_pipeline(
             uart_command_fetch <= uart_rx; //write the data from UART
             ready_to_act <= 1'b0; //when the valid_command is up module doesn't read any commands until the cycle is done
         end
-    end
+    end*/
     
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -81,7 +81,19 @@ module Crossbar_pipeline(
             bcd_moist <= 1'b0;
             bcd_dist <= 1'b0;
             data_transaction_ready <= 1'b0;
+            //
+            
+            uart_command_fetch <= 8'b0;
+            ready_to_act <= 1'b1;
+            //
         end else begin
+        //end else begin
+        //
+        if (valid_command && ready_to_act) begin
+            uart_command_fetch <= uart_rx; //write the data from UART
+            ready_to_act <= 1'b0; //when the valid_command is up module doesn't read any commands until the cycle is done
+        end
+        //
            case (command_decode)
                 IDLE: begin //default state, waiting for the command
                     dht11_start <= 1'b0;
@@ -142,14 +154,15 @@ module Crossbar_pipeline(
                             4'd7: uart_tx <= 8'h0D;
                             default: sending <= 1'b0;
                         endcase
-                        //$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
-                        //$display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
-                        //$display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
-                        //$display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
-                        //$display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
-                        //$display("ascii_data_moist3: %b",ascii_data_moist[7:0]);
+                        $display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
+                        $display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
+                        $display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
+                        $display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
+                        $display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
+                        $display("ascii_data_moist3: %b",ascii_data_moist[7:0]);
                         if (counter < 4'd7) begin
                             counter <= counter + 1;
+                            $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
                             ready_to_act <= 1'b1;
@@ -187,11 +200,12 @@ module Crossbar_pipeline(
                             4'd4: uart_tx <= 8'h0D;
                             default: sending <= 1'b0;
                         endcase
-                        //$display("ascii_data_dist1: %b",ascii_data_moist[23:16]);
-                        //$display("ascii_data_dist2: %b",ascii_data_moist[15:8]);
-                        //$display("ascii_data_dist3: %b",ascii_data_moist[7:0]);
+                        $display("ascii_data_dist1: %b",ascii_data_moist[23:16]);
+                        $display("ascii_data_dist2: %b",ascii_data_moist[15:8]);
+                        $display("ascii_data_dist3: %b",ascii_data_moist[7:0]);
                         if (counter < 4'd4) begin
                             counter <= counter + 1;
+                            $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
                             ready_to_act <= 1'b1;
