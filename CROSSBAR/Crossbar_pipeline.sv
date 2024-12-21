@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 5
+// Additional Comments: Version 7
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -132,7 +132,7 @@ module Crossbar_pipeline(
                 end
                 ASCII_TEMP_N_MOIST: begin
                     if (ready_temp && ready_moist) begin //if the BCD-ASCII done it's job
-                        data_transaction_ready <= 1'b1;
+                        //data_transaction_ready <= 1'b1; //CHECK: 2 cycles before the actual transaction (doesn't work on board)
                         bcd_temp <= 1'b0; //flag to stop BCD-ASCII for temperature
                         bcd_moist <= 1'b0; //flag to stop BCD-ASCII for moisture
                         command_decode <= SEND_TEMP_N_MOIST;
@@ -140,9 +140,11 @@ module Crossbar_pipeline(
                 end
                 SEND_TEMP_N_MOIST: begin
                     if (!sending && uart_ready) begin //if UART is ready to read and not sending
+                            //data_transaction_ready <= 1'b1; //CHECK: 1 cycle before the actual transaction (maybe it will work)
                             sending <= 1'b1; //start sending
                             counter <= 4'b0; //set counter constant to zero
                     end else if (execute_data !== 16'b0 && uart_ready) begin //if there non-zero data in buffer and UART is ready to read
+                        data_transaction_ready <= 1'b1; //CHECK: 0 cycles before the actual transaction (should be it)
                         case (counter) //send bytes
                             4'd0: uart_tx <= ascii_data_temp[23:16]; 
                             4'd1: uart_tx <= ascii_data_temp[15:8];
@@ -154,12 +156,12 @@ module Crossbar_pipeline(
                             4'd7: uart_tx <= 8'h0D;
                             default: sending <= 1'b0;
                         endcase
-                        $display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
+                        /*$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
                         $display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
                         $display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
                         $display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
                         $display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
-                        $display("ascii_data_moist3: %b",ascii_data_moist[7:0]);
+                        $display("ascii_data_moist3: %b",ascii_data_moist[7:0]);*/
                         if (counter < 4'd7) begin
                             counter <= counter + 1;
                             $display("Counter: %d", counter);
