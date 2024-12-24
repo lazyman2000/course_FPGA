@@ -33,7 +33,7 @@ enum logic [2:0] {RESET = 3'd0, SIG = 3'd1, START = 3'd2, TRIGGER = 3'd3, WAITER
 always_ff @(posedge clk or negedge rst)
 begin
 if (!rst) begin
-state <= RESET;
+state <= SIG;
 trig <=0;
 cnt_t <=0;
 cnt_e <=0;
@@ -136,3 +136,32 @@ end
 endcase
 end
 endmodule
+
+
+/*always_comb
+begin
+dist_m = 0;
+case(state)
+RESET:
+begin
+val = 0;
+distance = 0;
+end
+START:
+begin
+val = 0;
+distance = 0;
+end
+DONE: 
+begin
+  if ((cnt_e > 0) && (cnt_e != 1899999))
+   begin
+   dist_m = cnt_e*34;           // 340 m/s = 34*10^-5 ss/ns; N*cnt = N*20 ns; takes half => 17*2; 10^-5*10 => 10^-4            
+   distance = (dist_m >>> 14) + (dist_m >>> 15) + (dist_m >>> 17) + (dist_m >>> 21) + (dist_m >>> 22) + (dist_m >>> 24)+ (dist_m >>> 25)
+   +(dist_m >>> 27)+(dist_m >>> 28)+(dist_m >>> 29);  
+   val = 1;                     // 10^-4 = 0.00000000000001101000110110111 (shifi left by degrees corresponding to 1)
+   end                         // calculating the distance and setting the validity flag
+end
+endcase
+end
+*/
