@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 7
+// Additional Comments: Version 8
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -143,17 +143,25 @@ module Crossbar_pipeline(
                             //data_transaction_ready <= 1'b1; //CHECK: 1 cycle before the actual transaction (maybe it will work)
                             sending <= 1'b1; //start sending
                             counter <= 4'b0; //set counter constant to zero
-                    end else if (execute_data !== 16'b0 && uart_ready) begin //if there non-zero data in buffer and UART is ready to read
+                    end else if (execute_data != 16'b0 && uart_ready) begin //if there non-zero data in buffer and UART is ready to read
                         data_transaction_ready <= 1'b1; //CHECK: 0 cycles before the actual transaction (should be it)
                         case (counter) //send bytes
+                            //send data with letters
+                            /*4'd0: uart_tx <= 8'h54; //letter T
+                            4'd1: uart_tx <= ascii_data_temp[23:16]; 
+                            4'd2: uart_tx <= ascii_data_temp[15:8];
+                            4'd3: uart_tx <= ascii_data_temp[7:0];
+                            4'd4: uart_tx <= 8'h4D; //letter M
+                            4'd5: uart_tx <= ascii_data_moist[23:16];
+                            4'd6: uart_tx <= ascii_data_moist[15:8];
+                            4'd7: uart_tx <= ascii_data_moist[7:0];*/
+                            //WITHOUT letters
                             4'd0: uart_tx <= ascii_data_temp[23:16]; 
                             4'd1: uart_tx <= ascii_data_temp[15:8];
                             4'd2: uart_tx <= ascii_data_temp[7:0];
-                            4'd3: uart_tx <= 8'h0D;
-                            4'd4: uart_tx <= ascii_data_moist[23:16];
-                            4'd5: uart_tx <= ascii_data_moist[15:8];
-                            4'd6: uart_tx <= ascii_data_moist[7:0];
-                            4'd7: uart_tx <= 8'h0D;
+                            4'd3: uart_tx <= ascii_data_moist[23:16];
+                            4'd4: uart_tx <= ascii_data_moist[15:8];
+                            4'd5: uart_tx <= ascii_data_moist[7:0];
                             default: sending <= 1'b0;
                         endcase
                         /*$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
@@ -162,7 +170,8 @@ module Crossbar_pipeline(
                         $display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
                         $display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
                         $display("ascii_data_moist3: %b",ascii_data_moist[7:0]);*/
-                        if (counter < 4'd7) begin
+                        //if (counter < 4'd8) begin //send data with letters
+                        if (counter < 4'd6) begin //WITHOUT letters
                             counter <= counter + 1;
                             $display("Counter: %d", counter);
                         end else begin
@@ -193,19 +202,26 @@ module Crossbar_pipeline(
                     if (!sending && uart_ready) begin
                         sending <= 1'b1;
                         counter <= 4'b0;
-                    end else if (execute_data !== 16'b0 && uart_ready) begin      
+                    end else if (execute_data != 16'b0 && uart_ready) begin      
                         case (counter)
+                            //send data with letters
+                            /*4'd0: uart_tx <= 8'h44; //letter D
+                            4'd1: uart_tx <= ascii_data_dist[31:24];  
+                            4'd2: uart_tx <= ascii_data_dist[23:16];
+                            4'd3: uart_tx <= ascii_data_dist[15:8];
+                            4'd4: uart_tx <= ascii_data_dist[7:0];*/
+                            //WITHOUT letters
                             4'd0: uart_tx <= ascii_data_dist[31:24];  
                             4'd1: uart_tx <= ascii_data_dist[23:16];
                             4'd2: uart_tx <= ascii_data_dist[15:8];
                             4'd3: uart_tx <= ascii_data_dist[7:0];
-                            4'd4: uart_tx <= 8'h0D;
                             default: sending <= 1'b0;
                         endcase
                         $display("ascii_data_dist1: %b",ascii_data_moist[23:16]);
                         $display("ascii_data_dist2: %b",ascii_data_moist[15:8]);
                         $display("ascii_data_dist3: %b",ascii_data_moist[7:0]);
-                        if (counter < 4'd4) begin
+                        //if (counter < 4'd5) begin //send data with letters
+                        if (counter < 4'd4) begin //SLITNO
                             counter <= counter + 1;
                             $display("Counter: %d", counter);
                         end else begin
