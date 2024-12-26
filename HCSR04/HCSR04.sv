@@ -33,20 +33,23 @@ enum logic [2:0] {RESET = 3'd0, SIG = 3'd1, START = 3'd2, TRIGGER = 3'd3, WAITER
 always_ff @(posedge clk or negedge rst)
 begin
 if (!rst) begin
-state <= SIG;
-trig <=0;
-cnt_t <=0;
-cnt_e <=0;
+state <= RESET;
 end
 else begin
 state <= SIG;
 case (state)
 RESET:                                                    
 begin
-state <= SIG;                
+state <= SIG;
+trig <=0;
+cnt_t <=0;
+cnt_e <=0;                
 end
 SIG:                       // waiting of start signal 
 begin
+trig <=0;
+cnt_t <=0;
+cnt_e <=0; 
  if (start)
  state <= START;
  else
@@ -92,22 +95,12 @@ begin
 end
 DONE: 
 begin
- if (cnt_e == 1899999)  // 38 ms If the waiting time is longer than 38 ms, the sensor has not found an object 
-  begin
-  state <= RESET;
-  end
- else
- begin
-  if (cnt_e > 0)     // checked that echo is not null
+  if ((cnt_e > 0) && (cnt_e != 1899999))     // checked that echo is not null
    begin
    state <= SIG;
-   trig <=0;
-   cnt_e <=0; 
-   cnt_t <=0;
    end
   else
   state <= RESET;
- end
 end
  default:
   begin
