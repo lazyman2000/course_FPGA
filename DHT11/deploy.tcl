@@ -181,7 +181,7 @@ if {[string equal [get_filesets -quiet sim_1] ""]} {
 set obj [get_filesets sim_1]
 # Import local files from the original project
 set files [list \
- [file normalize "${origin_dir}/DHT11_TB.v" ]\
+ [file normalize "${origin_dir}/DHT11_TB.sv" ]\
 ]
 set imported_files [import_files -fileset sim_1 $files]
 
@@ -189,7 +189,7 @@ set imported_files [import_files -fileset sim_1 $files]
 # None
 
 # Set 'sim_1' fileset file properties for local files
-set file "DHT11_TB.v"
+set file "DHT11_TB.sv"
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property -name "file_type" -value "SystemVerilog" -objects $file_obj
 
