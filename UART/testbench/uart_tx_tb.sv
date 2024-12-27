@@ -57,15 +57,34 @@ module uart_tx_tb;
     #(PULSE_WIDTH * 70);
 
     // Сценарий 3: Датчик хочет отправить данные, но модуль не готов
-    $display("Scenario 3: Sensor waits for readiness");
-    data_from_sensor = 8'ha5;
+    /*$display("Scenario 3: Sensor waits for readiness");
+    data_from_sensor = 8'hb3;
     valid_from_sensor = 1;
     #(PULSE_WIDTH * 10);
     valid_from_sensor = 0; // Модуль не готов принять новые данные
-    #(PULSE_WIDTH * 30);
+    #(PULSE_WIDTH * 70);
     valid_from_sensor = 1; // Попытка отправить данные снова
+    #(PULSE_WIDTH * 140);*/
+    
+    // Сценарий 4: Датчик заранее готовит несколько байт данных
+    $display("Scenario 4: Sensor prepares multiple bytes in advance");
+    data_from_sensor = 8'hc4;
+    valid_from_sensor = 1;
     #(PULSE_WIDTH * 20);
+    valid_from_sensor = 0; // Отправлен первый байт
 
+    #(PULSE_WIDTH * 20);
+    data_from_sensor = 8'hb5;
+    valid_from_sensor = 1;
+    #(PULSE_WIDTH * 20);
+    valid_from_sensor = 0; // Отправлен второй байт
+
+    #(PULSE_WIDTH * 50);
+    data_from_sensor = 8'h9a;
+    valid_from_sensor = 1;
+    #(PULSE_WIDTH * 30);
+    valid_from_sensor = 0; // Отправлен третий байт
+    
     // Завершение симуляции
     #(PULSE_WIDTH * 50);
     $finish;
