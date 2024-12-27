@@ -110,7 +110,7 @@ module DHT11(
                if (data_counter !=40 ) begin // ���� �� ������� 40 ��� ������ (�� 0 �� 39)
                bit_counter <= bit_counter + 1; // ����������� ��������� ������� ��� ����������� ������������ ���
                     // ����������� �����
-                    if (falling_edge) begin // ��������� 0 : 50 ��� 0 � 26-28 ��� 1
+                    if (bit_counter >= (LOW_DURATION + (HIGH_DURATION_0)) && falling_edge) begin // ��������� 0 : 50 ��� 0 � 26-28 ��� 1
                     data_buffer[data_counter] <= 0; // ���������� 0 � ������
                     data_counter <= data_counter + 1; // ����������� ���-�� ��������� ��� �� 1
                     bit_counter <= 15'b1; // ���������� ��������� ������� ��� ����������� ������������ ���
