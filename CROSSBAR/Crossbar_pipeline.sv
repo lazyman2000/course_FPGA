@@ -82,6 +82,9 @@ module Crossbar_pipeline(
             bcd_dist <= 1'b0;
             data_transaction_ready <= 1'b0;
             //
+            /*ascii_data_dist <= 32'b0;
+            ascii_data_temp <= 32'b0;
+            ascii_data_moist <= 32'b0;*/
             
             uart_command_fetch <= 8'b0;
             ready_to_act <= 1'b1;
@@ -102,8 +105,17 @@ module Crossbar_pipeline(
                     bcd_temp <= 1'b0;
                     bcd_moist <= 1'b0;
                     bcd_dist <= 1'b0;
+                    uart_tx <= 8'b0;
+                    sending <= 1'b0;
                     data_transaction_ready <= 1'b0;
                     
+                    /*ascii_data_dist <= 32'b0;
+                    ascii_data_temp <= 32'b0;
+                    ascii_data_moist <= 32'b0;*/
+                    counter <= 4'b0;
+                    
+                    
+                    $display("IDLE");
                     if (!ready_to_act && uart_command_fetch == 8'h54) begin
                         command_decode <= START_TEMP_N_MOIST;
                     end else if (!ready_to_act && uart_command_fetch == 8'h44) begin
@@ -115,10 +127,12 @@ module Crossbar_pipeline(
                 START_TEMP_N_MOIST: begin
                     dht11_start <= 1'b1; //send the measurement initializing bit for DHT11
                     command_decode <= READ_TEMP_N_MOIST;
+                    $display("START_TEMP_N_MOIST");
                 end
                 START_DIST: begin
                     hc_sr04_start <= 1'b1; //send the measurement initializing bit for HCSR4
                     command_decode <= READ_DIST;
+                    $display("START_DIST");
                 end
                 READ_TEMP_N_MOIST: begin
                     dht11_start <= 1'b0; //the initializing bit should be set only for 1 clk period
@@ -128,6 +142,7 @@ module Crossbar_pipeline(
                         bcd_temp <= 1'b1; //flag to start BCD-ASCII transformation of the temperature data
                         bcd_moist <= 1'b1; //flag to start BCD-ASCII transformation of the moisture data
                         command_decode <= ASCII_TEMP_N_MOIST;
+                        $display("READ_TEMP_N_MOIST");
                     end
                 end
                 ASCII_TEMP_N_MOIST: begin
@@ -136,9 +151,11 @@ module Crossbar_pipeline(
                         bcd_temp <= 1'b0; //flag to stop BCD-ASCII for temperature
                         bcd_moist <= 1'b0; //flag to stop BCD-ASCII for moisture
                         command_decode <= SEND_TEMP_N_MOIST;
+                        $display("ASCII_TEMP_N_MOIST");
                     end
                 end
                 SEND_TEMP_N_MOIST: begin
+                $display("SEND_TEMP_N_MOIST");
                     if (!sending && uart_ready) begin //if UART is ready to read and not sending
                             //data_transaction_ready <= 1'b1; //CHECK: 1 cycle before the actual transaction (maybe it will work)
                             sending <= 1'b1; //start sending
@@ -176,6 +193,7 @@ module Crossbar_pipeline(
                             $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
+                            counter <= 4'b0;
                             ready_to_act <= 1'b1;
                             data_transaction_ready <= 1'b0;
                             command_decode <= IDLE;
@@ -189,20 +207,24 @@ module Crossbar_pipeline(
                         execute_data <= hc_sr04_data; //place recieved data from DHT11 into buffer
                         bcd_dist <= 1'b1;
                         command_decode <= ASCII_DIST;
+                        $display("READ_DIST");
                     end
                 end
                 ASCII_DIST: begin
                     if (ready_dist) begin
-                        data_transaction_ready <= 1'b1;
+                        //data_transaction_ready <= 1'b1;
                         bcd_dist <= 1'b0;
                         command_decode <= SEND_DIST;
+                        $display("ASCII_DIST");
                     end
                 end
                 SEND_DIST: begin
+                $display("SEND_DIST");
                     if (!sending && uart_ready) begin
                         sending <= 1'b1;
                         counter <= 4'b0;
-                    end else if (execute_data != 16'b0 && uart_ready) begin      
+                    end else if (execute_data != 16'b0 && uart_ready) begin
+                        data_transaction_ready <= 1'b1;     
                         case (counter)
                             //send data with letters
                             /*4'd0: uart_tx <= 8'h44; //letter D
@@ -226,6 +248,7 @@ module Crossbar_pipeline(
                             $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
+                            counter <= 4'b0;
                             ready_to_act <= 1'b1;
                             data_transaction_ready <= 1'b0;
                             command_decode <= IDLE;
