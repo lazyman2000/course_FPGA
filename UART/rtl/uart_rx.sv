@@ -1,4 +1,3 @@
-`include "if/uart_if.sv"
 module uart_rx
   #(parameter
     DATA_WIDTH = 8,
