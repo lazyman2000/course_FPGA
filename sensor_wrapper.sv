@@ -16,10 +16,9 @@ logic       dht11_data_o;
 logic       dht11_data_o_en;
 logic       echo;
 logic       trig;
-logic       clk;
 
 sensor_top i_sensor_top (
-    .clk             (clk_100        ),
+    .clk             (clk        ),
     .rst_n           (rst_n          ),
     .uart_rx_i       (FTDI_TXD       ),
     .uart_tx_o       (FTDI_RXD       ),
@@ -30,9 +29,13 @@ sensor_top i_sensor_top (
     .trig            (trig)
 );
 
+clock_50 i_clock (
+    .clk_in          (clk_100),
+    .clk_out         (clk)
+);
 
 assign echo = JB[0];
-assign JB[1] = trig;
+assign JB[2] = trig;
 assign JC[3] = dht11_data_o_en ? dht11_data_o : 'bz;
 assign dht11_data_i = JC[3];
 

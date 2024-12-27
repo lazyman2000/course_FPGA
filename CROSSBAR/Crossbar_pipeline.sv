@@ -7,7 +7,7 @@
 // Project Name: -
 // Target Devices: Arty A7-35
 //
-// Additional Comments: Version 5
+// Additional Comments: Version 8
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -50,8 +50,7 @@ module Crossbar_pipeline(
     logic [31:0] ascii_data_dist; //buffer for DHT11 data in ASCII symbols
     logic [31:0] ascii_data_temp; //buffer for HCSR4 temperature data in ASCII symbols   
     logic [31:0] ascii_data_moist; //buffer for HCSR4 moisture data in ASCII symbols    
-    logic ready_to_act_set;
-
+    
     logic ready_temp, ready_moist, ready_dist;
     logic bcd_temp, bcd_moist, bcd_dist;  
     
@@ -59,7 +58,7 @@ module Crossbar_pipeline(
     logic sending; //flag if the data is sending
 
     //Fetch
-    always_ff @(posedge clk or negedge rst) begin
+    /*always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             uart_command_fetch <= 8'b0;
             ready_to_act <= 1'b1;
@@ -67,9 +66,7 @@ module Crossbar_pipeline(
             uart_command_fetch <= uart_rx; //write the data from UART
             ready_to_act <= 1'b0; //when the valid_command is up module doesn't read any commands until the cycle is done
         end
-            else if (!ready_to_act && ready_to_act_set)
-                ready_to_act <= 1'b1;
-    end
+    end*/
     
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -84,18 +81,40 @@ module Crossbar_pipeline(
             bcd_moist <= 1'b0;
             bcd_dist <= 1'b0;
             data_transaction_ready <= 1'b0;
-            ready_to_act_set <= 1'b0;
+            
+            /*ascii_data_dist <= 32'b0;
+            ascii_data_temp <= 32'b0;
+            ascii_data_moist <= 32'b0;*/
+            //
+            
+            uart_command_fetch <= 8'b0;
+            ready_to_act <= 1'b1;
+            //
         end else begin
+        //end else begin
+        //
+        if (valid_command && ready_to_act) begin
+            uart_command_fetch <= uart_rx; //write the data from UART
+            ready_to_act <= 1'b0; //when the valid_command is up module doesn't read any commands until the cycle is done
+        end
+        //
            case (command_decode)
                 IDLE: begin //default state, waiting for the command
+                    counter <= 4'b0;
+                    sending <= 1'b0; 
                     dht11_start <= 1'b0;
                     hc_sr04_start <= 1'b0;
                     execute_data <= 16'b0;
                     bcd_temp <= 1'b0;
                     bcd_moist <= 1'b0;
                     bcd_dist <= 1'b0;
+                    uart_tx <= 8'b0;
                     data_transaction_ready <= 1'b0;
-                    ready_to_act_set <= 1'b0;
+                    
+                    /*ascii_data_dist <= 32'b0;
+                    ascii_data_temp <= 32'b0;
+                    ascii_data_moist <= 32'b0;*/
+                    
                     if (!ready_to_act && uart_command_fetch == 8'h54) begin
                         command_decode <= START_TEMP_N_MOIST;
                     end else if (!ready_to_act && uart_command_fetch == 8'h44) begin
@@ -124,7 +143,7 @@ module Crossbar_pipeline(
                 end
                 ASCII_TEMP_N_MOIST: begin
                     if (ready_temp && ready_moist) begin //if the BCD-ASCII done it's job
-                        data_transaction_ready <= 1'b1;
+                        //data_transaction_ready <= 1'b1; //CHECK: 2 cycles before the actual transaction (doesn't work on board)
                         bcd_temp <= 1'b0; //flag to stop BCD-ASCII for temperature
                         bcd_moist <= 1'b0; //flag to stop BCD-ASCII for moisture
                         command_decode <= SEND_TEMP_N_MOIST;
@@ -132,31 +151,44 @@ module Crossbar_pipeline(
                 end
                 SEND_TEMP_N_MOIST: begin
                     if (!sending && uart_ready) begin //if UART is ready to read and not sending
+                            //data_transaction_ready <= 1'b1; //CHECK: 1 cycle before the actual transaction (maybe it will work)
                             sending <= 1'b1; //start sending
                             counter <= 4'b0; //set counter constant to zero
                     end else if (execute_data != 16'b0 && uart_ready) begin //if there non-zero data in buffer and UART is ready to read
+                        data_transaction_ready <= 1'b1; //CHECK: 0 cycles before the actual transaction (should be it)
                         case (counter) //send bytes
+                            //send data with letters
+                            /*4'd0: uart_tx <= 8'h54; //letter T
+                            4'd1: uart_tx <= ascii_data_temp[23:16]; 
+                            4'd2: uart_tx <= ascii_data_temp[15:8];
+                            4'd3: uart_tx <= ascii_data_temp[7:0];
+                            4'd4: uart_tx <= 8'h4D; //letter M
+                            4'd5: uart_tx <= ascii_data_moist[23:16];
+                            4'd6: uart_tx <= ascii_data_moist[15:8];
+                            4'd7: uart_tx <= ascii_data_moist[7:0];*/
+                            //WITHOUT letters
                             4'd0: uart_tx <= ascii_data_temp[23:16]; 
                             4'd1: uart_tx <= ascii_data_temp[15:8];
                             4'd2: uart_tx <= ascii_data_temp[7:0];
-                            4'd3: uart_tx <= 8'h0D;
-                            4'd4: uart_tx <= ascii_data_moist[23:16];
-                            4'd5: uart_tx <= ascii_data_moist[15:8];
-                            4'd6: uart_tx <= ascii_data_moist[7:0];
-                            4'd7: uart_tx <= 8'h0D;
+                            4'd3: uart_tx <= ascii_data_moist[23:16];
+                            4'd4: uart_tx <= ascii_data_moist[15:8];
+                            4'd5: uart_tx <= ascii_data_moist[7:0];
                             default: sending <= 1'b0;
                         endcase
-                        //$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
-                        //$display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
-                        //$display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
-                        //$display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
-                        //$display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
-                        //$display("ascii_data_moist3: %b",ascii_data_moist[7:0]);
-                        if (counter < 4'd7) begin
+                        /*$display("ascii_data_temp1: %b",ascii_data_temp[23:16]);
+                        $display("ascii_data_temp2: %b",ascii_data_temp[15:8]);
+                        $display("ascii_data_temp3: %b",ascii_data_temp[7:0]);
+                        $display("ascii_data_moist1: %b",ascii_data_moist[23:16]);
+                        $display("ascii_data_moist2: %b",ascii_data_moist[15:8]);
+                        $display("ascii_data_moist3: %b",ascii_data_moist[7:0]);*/
+                        //if (counter < 4'd8) begin //send data with letters
+                        if (counter < 4'd6) begin //WITHOUT letters
                             counter <= counter + 1;
+                            $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
-                            ready_to_act_set <= 1'b1;
+                            counter <= 4'b0;
+                            ready_to_act <= 1'b1;
                             data_transaction_ready <= 1'b0;
                             command_decode <= IDLE;
                         end
@@ -173,7 +205,7 @@ module Crossbar_pipeline(
                 end
                 ASCII_DIST: begin
                     if (ready_dist) begin
-                        data_transaction_ready <= 1'b1;
+                        //data_transaction_ready <= 1'b1;
                         bcd_dist <= 1'b0;
                         command_decode <= SEND_DIST;
                     end
@@ -182,23 +214,33 @@ module Crossbar_pipeline(
                     if (!sending && uart_ready) begin
                         sending <= 1'b1;
                         counter <= 4'b0;
-                    end else if (execute_data != 16'b0 && uart_ready) begin      
+                    end else if (execute_data != 16'b0 && uart_ready) begin   
+                        data_transaction_ready <= 1'b1;   
                         case (counter)
+                            //send data with letters
+                            /*4'd0: uart_tx <= 8'h44; //letter D
+                            4'd1: uart_tx <= ascii_data_dist[31:24];  
+                            4'd2: uart_tx <= ascii_data_dist[23:16];
+                            4'd3: uart_tx <= ascii_data_dist[15:8];
+                            4'd4: uart_tx <= ascii_data_dist[7:0];*/
+                            //WITHOUT letters
                             4'd0: uart_tx <= ascii_data_dist[31:24];  
                             4'd1: uart_tx <= ascii_data_dist[23:16];
                             4'd2: uart_tx <= ascii_data_dist[15:8];
                             4'd3: uart_tx <= ascii_data_dist[7:0];
-                            4'd4: uart_tx <= 8'h0D;
                             default: sending <= 1'b0;
                         endcase
-                        //$display("ascii_data_dist1: %b",ascii_data_moist[23:16]);
-                        //$display("ascii_data_dist2: %b",ascii_data_moist[15:8]);
-                        //$display("ascii_data_dist3: %b",ascii_data_moist[7:0]);
-                        if (counter < 4'd4) begin
+                        $display("ascii_data_dist1: %b",ascii_data_moist[23:16]);
+                        $display("ascii_data_dist2: %b",ascii_data_moist[15:8]);
+                        $display("ascii_data_dist3: %b",ascii_data_moist[7:0]);
+                        //if (counter < 4'd5) begin //send data with letters
+                        if (counter < 4'd4) begin //SLITNO
                             counter <= counter + 1;
+                            $display("Counter: %d", counter);
                         end else begin
                             sending <= 1'b0;
-                            ready_to_act_set <= 1'b1;
+                            counter <= 4'b0;
+                            ready_to_act <= 1'b1;
                             data_transaction_ready <= 1'b0;
                             command_decode <= IDLE;
                         end

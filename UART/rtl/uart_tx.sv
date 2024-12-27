@@ -6,22 +6,23 @@ module uart_tx
     CLK_FREQ   = 100_000_000,
 
     localparam
-    LB_DATA_WIDTH    = $clog2(DATA_WIDTH),
-    PULSE_WIDTH      = CLK_FREQ / BAUD_RATE,
-    LB_PULSE_WIDTH   = $clog2(PULSE_WIDTH),
-    HALF_PULSE_WIDTH = PULSE_WIDTH / 2)
+    LB_DATA_WIDTH    = $clog2(DATA_WIDTH), //���������� ���, ����������� ��� ��������� ���� ��� ������ (= 3)
+    PULSE_WIDTH      = CLK_FREQ / BAUD_RATE, // ���������� �������� ��������� ��� ����� ������������ ����
+    LB_PULSE_WIDTH   = $clog2(PULSE_WIDTH), // ���������� ��� ��� �������� PULSE_WIDTH
+    HALF_PULSE_WIDTH = PULSE_WIDTH / 2) //�������� ������������ ������ ���� (��� ������ �������������)
    (
-    output logic tx_sig,
+    output logic tx_sig, // ������ ��������, ����������� ������������
     input logic clk,
     input logic rstn,
-    input logic [DATA_WIDTH-1:0] data_from_sensor,
-    input logic valid_from_sensor,
-    output logic ready_to_sensor
+    input logic [DATA_WIDTH-1:0] data_from_sensor, 
+    input logic valid_from_sensor, // ������ ������� �������� ������ � ���������
+    output logic ready_to_sensor // ���� ��� ���������, � ���������� UART ��������� ������
    );
 
    typedef enum logic [1:0] {STT_DATA,
                              STT_STOP,
-                             STT_WAIT} statetype;
+                             STT_WAIT,
+                             STT_DELAY} statetype;
 
    statetype state;
    logic [DATA_WIDTH-1:0] data_r;
@@ -29,7 +30,7 @@ module uart_tx
    logic [LB_DATA_WIDTH-1:0] data_cnt;
    logic [LB_PULSE_WIDTH:0] clk_cnt;
 
-   logic sensor_data_pending;
+   logic sensor_data_pending; //���� ���� sensor_data_pending ����������, ������ �� ������� ������������ �� ��
 
    always_ff @(posedge clk or negedge rstn) begin
       if (!rstn) begin
@@ -46,12 +47,12 @@ module uart_tx
               if (0 < clk_cnt) begin
                  clk_cnt <= clk_cnt - 1;
               end else begin
-                 sig_r   <= data_r[data_cnt];
-                 clk_cnt <= PULSE_WIDTH;
-                 if (data_cnt == DATA_WIDTH - 1) begin
+                 sig_r   <= data_r[data_cnt]; //�� �������� ������ sig_r ��������� �������� �������� ���� �� �������� data_r, �������������� ��������� data_cnt
+                 clk_cnt <= PULSE_WIDTH; // ��� ������������� ������������ ��� ���������� ����
+                 if (data_cnt == DATA_WIDTH - 1) begin // �����������, ��� �� ������� ��������� ��� ������ (������� ���)
                     state <= STT_STOP;
                  end else begin
-                    data_cnt <= data_cnt + 1;
+                    data_cnt <= data_cnt + 1; // ��������� ��� ������, ������� ����� ������� � ��������� �����
                  end
               end
            end
@@ -60,10 +61,19 @@ module uart_tx
               if (0 < clk_cnt) begin
                  clk_cnt <= clk_cnt - 1;
               end else begin
-                 state   <= STT_WAIT;
-                 sig_r   <= 1;
-                 clk_cnt <= PULSE_WIDTH + HALF_PULSE_WIDTH;
-                 ready_to_sensor <= 1;
+                 state   <= STT_DELAY; // ������� � ��������� �������� ����� ��������� ����
+                 sig_r   <= 1; // ����� �������� (TX) ������ ���������� � ��������� ����� (1) ����� ���������� �������� ��������� ����
+                 clk_cnt <= PULSE_WIDTH + HALF_PULSE_WIDTH; // �������� ����� ������ ����� ������
+                 data_r <= 0; // ����� �������
+              end
+           end
+
+           STT_DELAY: begin
+              if (0 < clk_cnt) begin
+                 clk_cnt <= clk_cnt - 1;
+              end else begin
+                 state <= STT_WAIT; // ����� �������� ��������� � �������� ����� ������
+                 ready_to_sensor <= 1; // ������������� ���� ���������� ����� ��������
                  sensor_data_pending <= 0;
               end
            end
@@ -73,15 +83,11 @@ module uart_tx
                  state   <= STT_DATA;
                  sig_r   <= 0;
                  data_r  <= data_from_sensor;
-                 ready_to_sensor <= 0; // Выставляю флаг о неготовности принимать новые данные от кроссбара
-                 sensor_data_pending <= 1; // внутренний флаг, который указывает, что данные от датчика получены и ожидают отправки
+                 ready_to_sensor <= 0; // �������� ���� ���������� ����� ����� ����� ������
+                 sensor_data_pending <= 1; // ���������� ����, ������� ���������, ��� ������ �� ������� �������� � ������� ��������
                  data_cnt <= 0;
                  clk_cnt  <= PULSE_WIDTH;
-              end 
-              /*else if (valid_from_sensor) begin
-                 sensor_data_pending <= 1;
-                 ready_to_sensor <= 0;
-              end*/
+              end
            end
 
            default: state <= STT_WAIT;
