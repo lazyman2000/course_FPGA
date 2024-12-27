@@ -34,6 +34,9 @@ always_ff @(posedge clk or negedge rst)
 begin
 if (!rst) begin
 state <= RESET;
+trig <=0;
+cnt_t <=0;
+cnt_e <=0; 
 end
 else begin
 state <= SIG;
